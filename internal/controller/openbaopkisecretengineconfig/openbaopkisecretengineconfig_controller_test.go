@@ -860,10 +860,10 @@ func TestPKIConfig_PublishCABundle_SelfHealsWhenDeleted(t *testing.T) {
 	require.True(t, ok, "deleted CA-bundle ConfigMap must be republished (self-heal)")
 }
 
-// replaceCAAtMount swaps the CA the fake serves at the CR's mount, modelling a
-// CA replacement (new mount adopted, or the CA regenerated in place).
-func replaceCAAtMount(fb *fakeBao, mount, serial, cert string) {
-	fb.caBySerial[key("", mount)] = &baoclient.PKICAResponse{SerialNumber: serial, Certificate: cert}
+// replaceCAAtMount swaps the CA the fake serves at pkiPath, modelling a CA
+// replacement (new mount adopted, or the CA regenerated in place).
+func replaceCAAtMount(fb *fakeBao, serial, cert string) {
+	fb.caBySerial[key("", pkiPath)] = &baoclient.PKICAResponse{SerialNumber: serial, Certificate: cert}
 }
 
 func TestPKIConfig_PublishCABundle_FirstPublishHasNoPreviousKey(t *testing.T) {
@@ -901,7 +901,7 @@ func TestPKIConfig_PublishCABundle_RetainsReplacedCA(t *testing.T) {
 	require.NotEmpty(t, firstCA)
 
 	const secondCA = "-----BEGIN CERTIFICATE-----\nREPLACEMENT\n-----END CERTIFICATE-----\n"
-	replaceCAAtMount(fb, pkiPath, "replacement-serial", secondCA)
+	replaceCAAtMount(fb, "replacement-serial", secondCA)
 	reconcile(t, r, c.Name)
 
 	cm, ok = getCM(t, r)
@@ -926,11 +926,11 @@ func TestPKIConfig_PublishCABundle_RetainsOnlyMostRecentReplacedCA(t *testing.T)
 	firstCA := cm.Data[caBundleKey]
 
 	const secondCA = "-----BEGIN CERTIFICATE-----\nSECOND\n-----END CERTIFICATE-----\n"
-	replaceCAAtMount(fb, pkiPath, "second-serial", secondCA)
+	replaceCAAtMount(fb, "second-serial", secondCA)
 	reconcile(t, r, c.Name)
 
 	const thirdCA = "-----BEGIN CERTIFICATE-----\nTHIRD\n-----END CERTIFICATE-----\n"
-	replaceCAAtMount(fb, pkiPath, "third-serial", thirdCA)
+	replaceCAAtMount(fb, "third-serial", thirdCA)
 	reconcile(t, r, c.Name)
 
 	cm, ok = getCM(t, r)
@@ -963,6 +963,68 @@ func TestPKIConfig_PublishCABundle_BlankActiveKeyNotRetained(t *testing.T) {
 	require.Contains(t, cm.Data[caBundleKey], "BEGIN CERTIFICATE", "active CA republished")
 	_, hasPrev := cm.Data[caPreviousBundleKey]
 	require.False(t, hasPrev, "blank outgoing value must not be retained")
+}
+
+// The published ConfigMap is a trust root. A consumer that takes every key (the
+// only way to pick up ca-previous.crt without a dangling source) would trust any
+// cert a third party wrote in, so unmanaged keys must be pruned, not preserved.
+func TestPKIConfig_PublishCABundle_PrunesUnmanagedKeys(t *testing.T) {
+	t.Parallel()
+	fb := newFakeBao()
+	c := sampleConfig("pki-root")
+	c.Spec.PublishCABundleConfigMap = caBundleCMName
+	r := buildReconciler(t, fb, c)
+
+	reconcile(t, r, c.Name)
+	reconcile(t, r, c.Name)
+	cm, ok := getCM(t, r)
+	require.True(t, ok)
+	activeCA := cm.Data[caBundleKey]
+
+	cm.Data["rogue.crt"] = "-----BEGIN CERTIFICATE-----\nROGUE\n-----END CERTIFICATE-----\n"
+	require.NoError(t, r.Update(context.Background(), cm))
+
+	// Active CA is unchanged, so only the unmanaged key can drive this write.
+	reconcile(t, r, c.Name)
+
+	cm, ok = getCM(t, r)
+	require.True(t, ok)
+	require.NotContains(t, cm.Data, "rogue.crt", "injected trust root must be pruned")
+	require.Equal(t, activeCA, cm.Data[caBundleKey], "pruning must not disturb the active CA")
+}
+
+// Pruning must not cost the retained CA — otherwise an injected key mid-migration
+// would silently end the trust overlap and break certs from the outgoing CA.
+func TestPKIConfig_PublishCABundle_PruneKeepsRetainedCA(t *testing.T) {
+	t.Parallel()
+	fb := newFakeBao()
+	c := sampleConfig("pki-root")
+	c.Spec.PublishCABundleConfigMap = caBundleCMName
+	r := buildReconciler(t, fb, c)
+
+	reconcile(t, r, c.Name)
+	reconcile(t, r, c.Name)
+	cm, ok := getCM(t, r)
+	require.True(t, ok)
+	firstCA := cm.Data[caBundleKey]
+
+	const secondCA = "-----BEGIN CERTIFICATE-----\nSECOND\n-----END CERTIFICATE-----\n"
+	replaceCAAtMount(fb, "second-serial", secondCA)
+	reconcile(t, r, c.Name)
+
+	cm, ok = getCM(t, r)
+	require.True(t, ok)
+	require.Equal(t, firstCA, cm.Data[caPreviousBundleKey])
+
+	cm.Data["rogue.crt"] = "-----BEGIN CERTIFICATE-----\nROGUE\n-----END CERTIFICATE-----\n"
+	require.NoError(t, r.Update(context.Background(), cm))
+	reconcile(t, r, c.Name)
+
+	cm, ok = getCM(t, r)
+	require.True(t, ok)
+	require.NotContains(t, cm.Data, "rogue.crt", "injected key pruned")
+	require.Equal(t, secondCA, cm.Data[caBundleKey], "active CA kept")
+	require.Equal(t, firstCA, cm.Data[caPreviousBundleKey], "retained CA survives the prune")
 }
 
 func TestPKIConfig_PublishCABundle_EmptyFieldNoConfigMap(t *testing.T) {

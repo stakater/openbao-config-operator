@@ -120,13 +120,14 @@ func OpenBaoPKISecretEngineConfigHandlers(cl client.Client, scheme *runtime.Sche
 			}
 			// Surface the published CA-bundle ConfigMap's current content so
 			// the drift check (IsEquivalentToDesiredState) republishes when it
-			// is missing/stale/deleted.
+			// is missing/stale/deleted, or carries a key we do not publish.
 			if name := strings.TrimSpace(p.Spec.PublishCABundleConfigMap); name != "" {
-				published, err := readPublishedCABundle(ctx, cl, p.Namespace, name)
+				published, unmanaged, err := readPublishedCABundle(ctx, cl, p.Namespace, name)
 				if err != nil {
 					return nil, err
 				}
 				payload["publishedCABundle"] = published
+				payload["publishedCABundleUnmanagedKeys"] = unmanaged
 			}
 			return payload, nil
 		},
@@ -280,18 +281,25 @@ func publishCABundle(ctx context.Context, cl client.Client, scheme *runtime.Sche
 	switch {
 	case getErr == nil:
 		outgoing := strings.TrimSpace(cm.Data[caBundleKey])
-		if outgoing == strings.TrimSpace(cert) {
+		if outgoing == strings.TrimSpace(cert) && !hasUnmanagedCABundleKeys(cm.Data) {
 			return nil // already current
 		}
-		if cm.Data == nil {
-			cm.Data = map[string]string{}
+		// Rebuild Data from scratch rather than mutating keys: this ConfigMap is
+		// a trust root, and a consumer that takes every key would otherwise trust
+		// any cert written into it by a third party. Only the keys below survive.
+		desired := map[string]string{caBundleKey: cert}
+		// Retain the outgoing CA. Skipped when the key was absent or blank —
+		// there is nothing certs in the field were issued by. Also skipped when
+		// the active cert is unchanged, so a prune-only write keeps what it had.
+		switch {
+		case outgoing == strings.TrimSpace(cert):
+			if prev := cm.Data[caPreviousBundleKey]; prev != "" {
+				desired[caPreviousBundleKey] = prev
+			}
+		case outgoing != "":
+			desired[caPreviousBundleKey] = cm.Data[caBundleKey]
 		}
-		// Retain the outgoing CA before overwriting. Skipped when the key was
-		// absent or blank — there is nothing certs in the field were issued by.
-		if outgoing != "" {
-			cm.Data[caPreviousBundleKey] = cm.Data[caBundleKey]
-		}
-		cm.Data[caBundleKey] = cert
+		cm.Data = desired
 		if err := cl.Update(ctx, &cm); err != nil {
 			return fmt.Errorf("%w: updating CA-bundle ConfigMap %q: %v", resource.ErrInternal, name, err)
 		}
@@ -319,18 +327,31 @@ func publishCABundle(ctx context.Context, cl client.Client, scheme *runtime.Sche
 	}
 }
 
-// readPublishedCABundle returns the ca.crt content of the named ConfigMap, or
-// "" when it doesn't exist yet (so the drift check treats it as needing a write).
-func readPublishedCABundle(ctx context.Context, cl client.Client, namespace, name string) (string, error) {
+// hasUnmanagedCABundleKeys reports whether data holds any key this controller
+// does not publish. Such a key is a trust root a third party put there, so it
+// has to be pruned rather than left for consumers to pick up.
+func hasUnmanagedCABundleKeys(data map[string]string) bool {
+	for k := range data {
+		if k != caBundleKey && k != caPreviousBundleKey {
+			return true
+		}
+	}
+	return false
+}
+
+// readPublishedCABundle returns the ca.crt content of the named ConfigMap and
+// whether it carries any key this controller does not publish. Content is "" when
+// the ConfigMap doesn't exist yet, so the drift check treats it as needing a write.
+func readPublishedCABundle(ctx context.Context, cl client.Client, namespace, name string) (string, bool, error) {
 	var cm corev1.ConfigMap
 	err := cl.Get(ctx, client.ObjectKey{Namespace: namespace, Name: name}, &cm)
 	switch {
 	case err == nil:
-		return cm.Data[caBundleKey], nil
+		return cm.Data[caBundleKey], hasUnmanagedCABundleKeys(cm.Data), nil
 	case apierrors.IsNotFound(err):
-		return "", nil
+		return "", false, nil
 	default:
-		return "", fmt.Errorf("%w: reading CA-bundle ConfigMap %q: %v", resource.ErrInternal, name, err)
+		return "", false, fmt.Errorf("%w: reading CA-bundle ConfigMap %q: %v", resource.ErrInternal, name, err)
 	}
 }
 

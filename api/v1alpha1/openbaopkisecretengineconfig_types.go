@@ -8,13 +8,18 @@
 //
 // The spec field set, names, json tags, and defaults match upstream exactly
 // (root + intermediate CA generation, the full PKICommon/PKIConfig field set,
-// and the PKIIntermediate signing models), with two deliberate exceptions:
+// and the PKIIntermediate signing models), with three deliberate exceptions:
 //   - Kind renamed PKISecretEngineConfig → OpenBaoPKISecretEngineConfig.
 //   - spec.connection and spec.authentication are NOT carried — this operator
 //     authenticates every primitive with a single operator token
 //     (VAULT_TOKEN), so per-CR Vault auth has no code path.
 //     spec.openbaoNamespace (X-Vault-Namespace target) replaces upstream's
 //     authentication.namespace.
+//   - spec.publishCABundleConfigMap is ADDED; upstream has no equivalent. Its
+//     only Kubernetes write is the exported-private-key Secret, which is
+//     created once and never updated. Trust distribution needs the CA cert in
+//     Kubernetes and needs it to follow CA changes, which nothing upstream
+//     does, so the publisher and its ConfigMap-ownership rules are ours.
 //
 // Status carries upstream's generated/exported/signed booleans PLUS the
 // base-tracking fields this operator's shared VaultResource requires
@@ -102,10 +107,15 @@ func (d *OpenBaoPKISecretEngineConfig) IsEquivalentToDesiredState(payload map[st
 	// CA-bundle publishing drift: if the CR wants its CA published and the
 	// ConfigMap's content doesn't match the active CA cert (missing, stale, or
 	// deleted out-of-band), force a write so it self-heals on the next reconcile.
+	// An unmanaged key counts as drift too: the ConfigMap is a trust root, and a
+	// consumer taking every key would otherwise trust whatever was written there.
 	if strings.TrimSpace(d.Spec.PublishCABundleConfigMap) != "" {
 		desiredCA, _ := payload["caCert"].(string)
 		publishedCA, _ := payload["publishedCABundle"].(string)
 		if strings.TrimSpace(publishedCA) != strings.TrimSpace(desiredCA) {
+			return false
+		}
+		if unmanaged, _ := payload["publishedCABundleUnmanagedKeys"].(bool); unmanaged {
 			return false
 		}
 	}
