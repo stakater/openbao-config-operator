@@ -340,6 +340,7 @@ spec:
 | `spec.internalSign` | object | intermediate | Signing CA: `name` = its bao **mount path**; `openbaoNamespace` = its namespace (empty → this CR's own namespace; set it to sign cross-namespace, e.g. a platform CA). Mutually exclusive with `externalSignSecret`. |
 | `spec.externalSignSecret` | objectRef | intermediate | Secret holding the externally-signed cert. Mutually exclusive with `internalSign`. |
 | `spec.certificateKey` | string | no | Key within `externalSignSecret` holding the signed cert; default `tls.crt`. |
+| `spec.publishCABundleConfigMap` | string | no | Names a ConfigMap (this CR's namespace) kept populated with the active CA cert PEM under `ca.crt`, plus the CA that key held before the last change under `ca-previous.crt`. Owner-ref'd to the CR. Empty = don't publish. |
 
 `type=intermediate` requires **exactly one** of `internalSign` / `externalSignSecret`; `type=root` rejects both.
 
@@ -359,6 +360,7 @@ spec:
 - **Idempotent on existing CA.** BaoWrite re-probes via ReadPKICA; if a CA exists, only URLs are updated. Generate / sign is never run twice on the same mount.
 - **External-sign generates the CSR exactly once.** While awaiting the offline signature the operator does not regenerate — the existing CSR Secret gates regeneration, so a retried signature uses the same key.
 - **Drift correction.** URL config is the only mutable surface once the CA is active. CR-spec changes to URL fields are applied; CR-spec changes to CA fields (commonName, ttl, keyType, keyBits, subject, name constraints) are **silently ignored** because regenerating would destroy the private key — change those by creating a new mount + new CR.
+- **Published CA bundle retains one predecessor.** When the active CA changes, the cert `ca.crt` held moves to `ca-previous.crt` before the new one is written. Certs issued by the outgoing CA stay in use until every workload re-issues, and they only validate while verifiers still trust it — so a trust distributor must source **every key** of the ConfigMap, not just `ca.crt`. Retention is bounded at one: a second replacement drops the CA before it. The drift check compares `ca.crt` only, so the extra key does not cause repeat writes.
 - **Collision.** Two CRs at the same `(spec.path, spec.openbaoNamespace)` tuple → older `creationTimestamp` wins; loser `Ready=False, reason=NameCollision`.
 - **Force-delete footgun.** `kubectl delete --grace-period=0 --force` releases the finalizer without the operator running cleanup. Same effect as the normal delete in this case — bao state is preserved either way.
 

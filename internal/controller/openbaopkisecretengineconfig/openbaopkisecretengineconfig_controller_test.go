@@ -860,6 +860,111 @@ func TestPKIConfig_PublishCABundle_SelfHealsWhenDeleted(t *testing.T) {
 	require.True(t, ok, "deleted CA-bundle ConfigMap must be republished (self-heal)")
 }
 
+// replaceCAAtMount swaps the CA the fake serves at the CR's mount, modelling a
+// CA replacement (new mount adopted, or the CA regenerated in place).
+func replaceCAAtMount(fb *fakeBao, mount, serial, cert string) {
+	fb.caBySerial[key("", mount)] = &baoclient.PKICAResponse{SerialNumber: serial, Certificate: cert}
+}
+
+func TestPKIConfig_PublishCABundle_FirstPublishHasNoPreviousKey(t *testing.T) {
+	t.Parallel()
+	fb := newFakeBao()
+	c := sampleConfig("pki-root")
+	c.Spec.PublishCABundleConfigMap = caBundleCMName
+	r := buildReconciler(t, fb, c)
+
+	reconcile(t, r, c.Name)
+	reconcile(t, r, c.Name)
+
+	cm, ok := getCM(t, r)
+	require.True(t, ok)
+	require.Contains(t, cm.Data[caBundleKey], "BEGIN CERTIFICATE")
+	_, hasPrev := cm.Data[caPreviousBundleKey]
+	require.False(t, hasPrev, "nothing has been replaced yet, so no retained CA")
+}
+
+// A CA replacement must keep the outgoing CA distributable: certs it issued stay
+// in use until every workload re-issues, and they only validate while verifiers
+// still trust it.
+func TestPKIConfig_PublishCABundle_RetainsReplacedCA(t *testing.T) {
+	t.Parallel()
+	fb := newFakeBao()
+	c := sampleConfig("pki-root")
+	c.Spec.PublishCABundleConfigMap = caBundleCMName
+	r := buildReconciler(t, fb, c)
+
+	reconcile(t, r, c.Name)
+	reconcile(t, r, c.Name)
+	cm, ok := getCM(t, r)
+	require.True(t, ok)
+	firstCA := cm.Data[caBundleKey]
+	require.NotEmpty(t, firstCA)
+
+	const secondCA = "-----BEGIN CERTIFICATE-----\nREPLACEMENT\n-----END CERTIFICATE-----\n"
+	replaceCAAtMount(fb, pkiPath, "replacement-serial", secondCA)
+	reconcile(t, r, c.Name)
+
+	cm, ok = getCM(t, r)
+	require.True(t, ok)
+	require.Equal(t, secondCA, cm.Data[caBundleKey], "active key must hold the new CA")
+	require.Equal(t, firstCA, cm.Data[caPreviousBundleKey], "replaced CA must be retained")
+}
+
+// Retention is bounded at one: the overlap window spans a single replacement, so
+// a second replacement drops the CA before it rather than growing the ConfigMap.
+func TestPKIConfig_PublishCABundle_RetainsOnlyMostRecentReplacedCA(t *testing.T) {
+	t.Parallel()
+	fb := newFakeBao()
+	c := sampleConfig("pki-root")
+	c.Spec.PublishCABundleConfigMap = caBundleCMName
+	r := buildReconciler(t, fb, c)
+
+	reconcile(t, r, c.Name)
+	reconcile(t, r, c.Name)
+	cm, ok := getCM(t, r)
+	require.True(t, ok)
+	firstCA := cm.Data[caBundleKey]
+
+	const secondCA = "-----BEGIN CERTIFICATE-----\nSECOND\n-----END CERTIFICATE-----\n"
+	replaceCAAtMount(fb, pkiPath, "second-serial", secondCA)
+	reconcile(t, r, c.Name)
+
+	const thirdCA = "-----BEGIN CERTIFICATE-----\nTHIRD\n-----END CERTIFICATE-----\n"
+	replaceCAAtMount(fb, pkiPath, "third-serial", thirdCA)
+	reconcile(t, r, c.Name)
+
+	cm, ok = getCM(t, r)
+	require.True(t, ok)
+	require.Equal(t, thirdCA, cm.Data[caBundleKey])
+	require.Equal(t, secondCA, cm.Data[caPreviousBundleKey], "retains the CA it just replaced")
+	require.NotContains(t, cm.Data[caPreviousBundleKey], firstCA, "older CA is dropped")
+}
+
+// Retention must not fire on a blank active key — there is nothing certs in the
+// field were issued by, so publishing an empty retained CA would be noise.
+func TestPKIConfig_PublishCABundle_BlankActiveKeyNotRetained(t *testing.T) {
+	t.Parallel()
+	fb := newFakeBao()
+	c := sampleConfig("pki-root")
+	c.Spec.PublishCABundleConfigMap = caBundleCMName
+	r := buildReconciler(t, fb, c)
+
+	reconcile(t, r, c.Name)
+	reconcile(t, r, c.Name)
+	cm, ok := getCM(t, r)
+	require.True(t, ok)
+
+	cm.Data[caBundleKey] = "   "
+	require.NoError(t, r.Update(context.Background(), cm))
+	reconcile(t, r, c.Name)
+
+	cm, ok = getCM(t, r)
+	require.True(t, ok)
+	require.Contains(t, cm.Data[caBundleKey], "BEGIN CERTIFICATE", "active CA republished")
+	_, hasPrev := cm.Data[caPreviousBundleKey]
+	require.False(t, hasPrev, "blank outgoing value must not be retained")
+}
+
 func TestPKIConfig_PublishCABundle_EmptyFieldNoConfigMap(t *testing.T) {
 	t.Parallel()
 	fb := newFakeBao()

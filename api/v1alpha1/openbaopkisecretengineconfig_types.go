@@ -370,9 +370,13 @@ type OpenBaoPKISecretEngineConfigSpec struct {
 
 	// PublishCABundleConfigMap, when set, names a ConfigMap (in this CR's
 	// namespace) the controller keeps populated with the active CA cert PEM
-	// (key "ca.crt"). It exists so a trust-distribution tool (cert-manager
-	// trust-manager) can source this CA for cross-tenant trust bundles. Empty
-	// = don't publish. The ConfigMap is owner-ref'd to this CR (GC on delete).
+	// (key "ca.crt"), plus the CA that key held before the last change
+	// (key "ca-previous.crt") so both stay trustable while certs issued by the
+	// outgoing CA are still in use. It exists so a trust-distribution tool
+	// (cert-manager trust-manager) can source this CA for cross-tenant trust
+	// bundles; sources must take every key, not just "ca.crt", to get the
+	// overlap. Empty = don't publish. The ConfigMap is owner-ref'd to this CR
+	// (GC on delete).
 	// +kubebuilder:validation:Optional
 	// +kubebuilder:validation:MaxLength=253
 	// +kubebuilder:validation:Pattern:=`^[a-z0-9]([-a-z0-9.]*[a-z0-9])?$`

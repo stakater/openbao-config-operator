@@ -45,6 +45,15 @@ const defaultCertificateKey = "tls.crt"
 // under (the conventional trust-bundle key cert-manager trust-manager sources).
 const caBundleKey = "ca.crt"
 
+// caPreviousBundleKey holds the CA cert that caBundleKey carried before the
+// last change. A CA replacement is not atomic across a fleet: certs issued by
+// the outgoing CA stay in use until every workload has re-issued, and they
+// only validate while verifiers still trust that CA. Retaining it under its
+// own key lets a trust distributor publish both CAs for the duration of the
+// migration. Bounded at one: the window spans a single replacement, so a
+// second replacement legitimately drops the CA before it.
+const caPreviousBundleKey = "ca-previous.crt"
+
 type OpenBaoPKISecretEngineConfigReconciler struct {
 	*resource.VaultResource[*v1alpha1.OpenBaoPKISecretEngineConfig]
 }
@@ -247,9 +256,11 @@ func finishActive(ctx context.Context, cl client.Client, scheme *runtime.Scheme,
 }
 
 // publishCABundle keeps spec.publishCABundleConfigMap populated with the active
-// CA cert PEM (key "ca.crt") for trust-distribution tooling. No-op when the
-// field is empty. Idempotent: writes only when the ConfigMap is missing or its
-// content differs from the active CA. Owner-ref'd to the CR for GC.
+// CA cert PEM (key "ca.crt") for trust-distribution tooling, and retains the
+// CA it replaced under "ca-previous.crt" so both remain distributable while
+// workloads re-issue. No-op when the field is empty. Idempotent: writes only
+// when the ConfigMap is missing or its content differs from the active CA.
+// Owner-ref'd to the CR for GC.
 func publishCABundle(ctx context.Context, cl client.Client, scheme *runtime.Scheme, bao baoclient.Client, p *v1alpha1.OpenBaoPKISecretEngineConfig, ns baoclient.CallOption) error {
 	name := strings.TrimSpace(p.Spec.PublishCABundleConfigMap)
 	if name == "" {
@@ -268,11 +279,17 @@ func publishCABundle(ctx context.Context, cl client.Client, scheme *runtime.Sche
 	getErr := cl.Get(ctx, client.ObjectKey{Namespace: p.Namespace, Name: name}, &cm)
 	switch {
 	case getErr == nil:
-		if strings.TrimSpace(cm.Data[caBundleKey]) == strings.TrimSpace(cert) {
+		outgoing := strings.TrimSpace(cm.Data[caBundleKey])
+		if outgoing == strings.TrimSpace(cert) {
 			return nil // already current
 		}
 		if cm.Data == nil {
 			cm.Data = map[string]string{}
+		}
+		// Retain the outgoing CA before overwriting. Skipped when the key was
+		// absent or blank — there is nothing certs in the field were issued by.
+		if outgoing != "" {
+			cm.Data[caPreviousBundleKey] = cm.Data[caBundleKey]
 		}
 		cm.Data[caBundleKey] = cert
 		if err := cl.Update(ctx, &cm); err != nil {
