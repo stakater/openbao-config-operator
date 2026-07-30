@@ -118,16 +118,18 @@ func OpenBaoPKISecretEngineConfigHandlers(cl client.Client, scheme *runtime.Sche
 				"caCert":   caCert,
 				"urls":     urlsMap,
 			}
-			// Surface the published CA-bundle ConfigMap's current content so
-			// the drift check (IsEquivalentToDesiredState) republishes when it
-			// is missing/stale/deleted, or carries a key we do not publish.
+			// Surface the published CA-bundle ConfigMap's state so the drift
+			// check (IsEquivalentToDesiredState) republishes when it is
+			// missing/stale/deleted, carries a key we do not publish, or is
+			// still owned by a previous publisher.
 			if name := strings.TrimSpace(p.Spec.PublishCABundleConfigMap); name != "" {
-				published, unmanaged, err := readPublishedCABundle(ctx, cl, p.Namespace, name)
+				published, err := readPublishedCABundle(ctx, cl, p, name)
 				if err != nil {
 					return nil, err
 				}
-				payload["publishedCABundle"] = published
-				payload["publishedCABundleUnmanagedKeys"] = unmanaged
+				payload["publishedCABundle"] = published.Active
+				payload["publishedCABundleUnmanagedKeys"] = published.UnmanagedKeys
+				payload["publishedCABundleStaleOwner"] = published.StaleOwner
 			}
 			return payload, nil
 		},
@@ -281,8 +283,20 @@ func publishCABundle(ctx context.Context, cl client.Client, scheme *runtime.Sche
 	switch {
 	case getErr == nil:
 		outgoing := strings.TrimSpace(cm.Data[caBundleKey])
-		if outgoing == strings.TrimSpace(cert) && !hasUnmanagedCABundleKeys(cm.Data) {
+		staleOwner := !isControlledBy(&cm, p)
+		if outgoing == strings.TrimSpace(cert) && !hasUnmanagedCABundleKeys(cm.Data) && !staleOwner {
 			return nil // already current
+		}
+		// Take ownership when a different CR published this ConfigMap before.
+		// Two CRs never publish the same name at once, so whoever is writing now
+		// is the owner. Leaving the reference behind means deleting the previous
+		// publisher garbage-collects the ConfigMap, and every consumer sourcing
+		// it loses the CA until this controller's next reconcile recreates it.
+		if staleOwner {
+			cm.OwnerReferences = withoutControllerRef(cm.OwnerReferences)
+			if err := controllerutil.SetControllerReference(p, &cm, scheme); err != nil {
+				return fmt.Errorf("%w: re-owning CA-bundle ConfigMap %q: %v", resource.ErrInternal, name, err)
+			}
 		}
 		// Rebuild Data from scratch rather than mutating keys: this ConfigMap is
 		// a trust root, and a consumer that takes every key would otherwise trust
@@ -327,6 +341,26 @@ func publishCABundle(ctx context.Context, cl client.Client, scheme *runtime.Sche
 	}
 }
 
+// isControlledBy reports whether obj's controller reference points at p.
+func isControlledBy(obj metav1.Object, p *v1alpha1.OpenBaoPKISecretEngineConfig) bool {
+	ref := metav1.GetControllerOf(obj)
+	return ref != nil && ref.UID == p.UID
+}
+
+// withoutControllerRef returns refs with any controller reference dropped, so a
+// new one can be set. SetControllerReference refuses to overwrite an existing
+// controller ref owned by someone else.
+func withoutControllerRef(refs []metav1.OwnerReference) []metav1.OwnerReference {
+	out := make([]metav1.OwnerReference, 0, len(refs))
+	for _, r := range refs {
+		if r.Controller != nil && *r.Controller {
+			continue
+		}
+		out = append(out, r)
+	}
+	return out
+}
+
 // hasUnmanagedCABundleKeys reports whether data holds any key this controller
 // does not publish. Such a key is a trust root a third party put there, so it
 // has to be pruned rather than left for consumers to pick up.
@@ -339,19 +373,35 @@ func hasUnmanagedCABundleKeys(data map[string]string) bool {
 	return false
 }
 
-// readPublishedCABundle returns the ca.crt content of the named ConfigMap and
-// whether it carries any key this controller does not publish. Content is "" when
-// the ConfigMap doesn't exist yet, so the drift check treats it as needing a write.
-func readPublishedCABundle(ctx context.Context, cl client.Client, namespace, name string) (string, bool, error) {
+// publishedCABundleState is what the drift check needs to know about the
+// published ConfigMap. Every field is a reason to rewrite it.
+type publishedCABundleState struct {
+	// Active is the ca.crt content, "" when the ConfigMap does not exist.
+	Active string
+	// UnmanagedKeys means a key this controller does not publish is present.
+	UnmanagedKeys bool
+	// StaleOwner means the controller reference points somewhere other than the
+	// CR that publishes it now, so deleting that other object would take the
+	// ConfigMap with it.
+	StaleOwner bool
+}
+
+// readPublishedCABundle inspects the named ConfigMap for anything that means the
+// publisher should write it again.
+func readPublishedCABundle(ctx context.Context, cl client.Client, p *v1alpha1.OpenBaoPKISecretEngineConfig, name string) (publishedCABundleState, error) {
 	var cm corev1.ConfigMap
-	err := cl.Get(ctx, client.ObjectKey{Namespace: namespace, Name: name}, &cm)
+	err := cl.Get(ctx, client.ObjectKey{Namespace: p.Namespace, Name: name}, &cm)
 	switch {
 	case err == nil:
-		return cm.Data[caBundleKey], hasUnmanagedCABundleKeys(cm.Data), nil
+		return publishedCABundleState{
+			Active:        cm.Data[caBundleKey],
+			UnmanagedKeys: hasUnmanagedCABundleKeys(cm.Data),
+			StaleOwner:    !isControlledBy(&cm, p),
+		}, nil
 	case apierrors.IsNotFound(err):
-		return "", false, nil
+		return publishedCABundleState{}, nil
 	default:
-		return "", false, fmt.Errorf("%w: reading CA-bundle ConfigMap %q: %v", resource.ErrInternal, name, err)
+		return publishedCABundleState{}, fmt.Errorf("%w: reading CA-bundle ConfigMap %q: %v", resource.ErrInternal, name, err)
 	}
 }
 
@@ -722,6 +772,51 @@ func checkPKIConfigCollision(ctx context.Context, cl client.Client, p *v1alpha1.
 		if otherWins {
 			return fmt.Errorf("%w: PKI mount %q (ns=%q) already owned by OpenBaoPKISecretEngineConfig %s/%s",
 				resource.ErrNameCollision, targetPath, targetNS, other.Namespace, other.Name)
+		}
+	}
+	return checkCABundleConfigMapCollision(ctx, cl, p)
+}
+
+// checkCABundleConfigMapCollision rejects a CR whose publishCABundleConfigMap
+// target is already claimed by a different CR in the same Kubernetes namespace.
+//
+// The publisher owns that ConfigMap's data outright: it rebuilds the key set and
+// takes the controller reference. Two publishers therefore do not merely
+// overwrite each other's CA, they prune it and steal ownership back on every
+// reconcile, so the ConfigMap — and every trust bundle sourcing it — flaps
+// between two CAs indefinitely while both CRs report Ready. Same tie-break as
+// the mount collision: older CreationTimestamp wins, then lex namespace/name.
+func checkCABundleConfigMapCollision(ctx context.Context, cl client.Client, p *v1alpha1.OpenBaoPKISecretEngineConfig) error {
+	target := strings.TrimSpace(p.Spec.PublishCABundleConfigMap)
+	if target == "" {
+		return nil
+	}
+	var all v1alpha1.OpenBaoPKISecretEngineConfigList
+	if err := cl.List(ctx, &all, client.InNamespace(p.Namespace)); err != nil {
+		return fmt.Errorf("%w: listing OpenBaoPKISecretEngineConfigs for CA-bundle collision check: %v",
+			resource.ErrInternal, err)
+	}
+	mineKey := p.Namespace + "/" + p.Name
+	for i := range all.Items {
+		other := &all.Items[i]
+		if other.UID == p.UID {
+			continue
+		}
+		if strings.TrimSpace(other.Spec.PublishCABundleConfigMap) != target {
+			continue
+		}
+		var otherWins bool
+		switch {
+		case other.CreationTimestamp.Before(&p.CreationTimestamp):
+			otherWins = true
+		case p.CreationTimestamp.Before(&other.CreationTimestamp):
+			otherWins = false
+		default:
+			otherWins = other.Namespace+"/"+other.Name < mineKey
+		}
+		if otherWins {
+			return fmt.Errorf("%w: CA-bundle ConfigMap %q is already published by OpenBaoPKISecretEngineConfig %s/%s; only one CR may publish a given ConfigMap",
+				resource.ErrNameCollision, target, other.Namespace, other.Name)
 		}
 	}
 	return nil

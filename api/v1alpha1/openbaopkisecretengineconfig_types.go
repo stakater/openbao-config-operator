@@ -118,6 +118,12 @@ func (d *OpenBaoPKISecretEngineConfig) IsEquivalentToDesiredState(payload map[st
 		if unmanaged, _ := payload["publishedCABundleUnmanagedKeys"].(bool); unmanaged {
 			return false
 		}
+		// A controller reference left behind by a previous publisher means
+		// deleting that object garbage-collects this ConfigMap, so ownership has
+		// to move even when the content already matches.
+		if staleOwner, _ := payload["publishedCABundleStaleOwner"].(bool); staleOwner {
+			return false
+		}
 	}
 	desiredURLs := map[string][]string{
 		"issuingCertificates":   sortedCopy(d.Spec.IssuingCertificates),

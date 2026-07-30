@@ -1027,6 +1027,109 @@ func TestPKIConfig_PublishCABundle_PruneKeepsRetainedCA(t *testing.T) {
 	require.Equal(t, firstCA, cm.Data[caPreviousBundleKey], "retained CA survives the prune")
 }
 
+// When the active mount moves, a different CR takes over publishing the same
+// ConfigMap. It must also take over the controller reference — otherwise
+// retiring the previous mount garbage-collects the ConfigMap and every consumer
+// sourcing it loses the CA.
+func TestPKIConfig_PublishCABundle_TakesOverOwnershipFromPreviousPublisher(t *testing.T) {
+	t.Parallel()
+	fb := newFakeBao()
+	c := sampleConfig("pki-root")
+	c.Spec.PublishCABundleConfigMap = caBundleCMName
+	r := buildReconciler(t, fb, c)
+
+	reconcile(t, r, c.Name)
+	reconcile(t, r, c.Name)
+	cm, ok := getCM(t, r)
+	require.True(t, ok)
+	require.Len(t, cm.OwnerReferences, 1)
+	require.Equal(t, c.Name, cm.OwnerReferences[0].Name)
+
+	// Model a previous publisher: point the controller ref at a foreign UID.
+	cm.OwnerReferences = []metav1.OwnerReference{{
+		APIVersion: v1alpha1.GroupVersion.String(),
+		Kind:       "OpenBaoPKISecretEngineConfig",
+		Name:       "pki-root-old-mount",
+		UID:        "00000000-0000-0000-0000-00000000dead",
+		Controller: ptrTo(true),
+	}}
+	require.NoError(t, r.Update(context.Background(), cm))
+
+	// Content already matches, so only the stale owner can drive this write.
+	reconcile(t, r, c.Name)
+
+	cm, ok = getCM(t, r)
+	require.True(t, ok)
+	require.Len(t, cm.OwnerReferences, 1, "the foreign controller ref must be replaced, not appended to")
+	require.Equal(t, c.Name, cm.OwnerReferences[0].Name, "publishing CR must own the ConfigMap")
+	require.Contains(t, cm.Data[caBundleKey], "BEGIN CERTIFICATE", "takeover must not disturb the CA")
+}
+
+func ptrTo[T any](v T) *T { return &v }
+
+// Two CRs publishing one ConfigMap do not merely overwrite each other: each
+// prunes the other's cert and takes the controller reference back, so the
+// ConfigMap flaps between two CAs forever while both CRs report Ready.
+func TestPKIConfig_PublishCABundle_SecondPublisherOfSameConfigMapCollides(t *testing.T) {
+	t.Parallel()
+	fb := newFakeBao()
+	older := sampleConfig("pki-root")
+	older.UID = "uid-older"
+	older.Spec.PublishCABundleConfigMap = caBundleCMName
+	older.CreationTimestamp = metav1.Now()
+
+	// Different mount, so only the shared ConfigMap target can collide.
+	rival := sampleConfig("pki-root-rival")
+	rival.UID = "uid-rival"
+	rival.Spec.Path = "pki-rival"
+	rival.Spec.PublishCABundleConfigMap = caBundleCMName
+	rival.CreationTimestamp = metav1.NewTime(older.CreationTimestamp.Add(time.Second))
+
+	r := buildReconciler(t, fb, older, rival)
+
+	reconcile(t, r, older.Name)
+	reconcile(t, r, older.Name)
+	reconcile(t, r, rival.Name)
+	reconcile(t, r, rival.Name)
+
+	olderCond := readyCond(t, getCfg(t, r, older.Name))
+	require.NotNil(t, olderCond)
+	require.Equal(t, metav1.ConditionTrue, olderCond.Status, "older CR keeps publishing")
+
+	rivalCond := readyCond(t, getCfg(t, r, rival.Name))
+	require.NotNil(t, rivalCond)
+	require.Equal(t, metav1.ConditionFalse, rivalCond.Status)
+	require.Equal(t, resource.ReasonNameCollision, rivalCond.Reason)
+	require.Contains(t, rivalCond.Message, caBundleCMName)
+
+	// The winner's CA must be what the ConfigMap holds.
+	cm, ok := getCM(t, r)
+	require.True(t, ok)
+	require.Contains(t, cm.Data[caBundleKey], "BEGIN CERTIFICATE")
+	require.Len(t, cm.OwnerReferences, 1)
+	require.Equal(t, older.Name, cm.OwnerReferences[0].Name, "rival must not steal ownership")
+}
+
+// A CR that publishes no ConfigMap must never collide on that axis.
+func TestPKIConfig_PublishCABundle_EmptyTargetNeverCollides(t *testing.T) {
+	t.Parallel()
+	fb := newFakeBao()
+	a := sampleConfig("pki-root") // no PublishCABundleConfigMap
+	a.UID = "uid-a"
+	b := sampleConfig("pki-root-two") // no PublishCABundleConfigMap
+	b.UID = "uid-b"
+	b.Spec.Path = "pki-two"
+	r := buildReconciler(t, fb, a, b)
+
+	for _, n := range []string{a.Name, b.Name} {
+		reconcile(t, r, n)
+		reconcile(t, r, n)
+		cond := readyCond(t, getCfg(t, r, n))
+		require.NotNil(t, cond)
+		require.Equal(t, metav1.ConditionTrue, cond.Status, "%s must not collide", n)
+	}
+}
+
 func TestPKIConfig_PublishCABundle_EmptyFieldNoConfigMap(t *testing.T) {
 	t.Parallel()
 	fb := newFakeBao()
