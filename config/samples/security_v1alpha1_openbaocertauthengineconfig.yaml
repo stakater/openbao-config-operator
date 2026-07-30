@@ -4,7 +4,7 @@ apiVersion: security.mto.stakater.com/v1alpha1
 kind: OpenBaoCertAuthEngineConfig
 metadata:
   name: cert
-  namespace: mto-extension-openbao-system
+  namespace: openbao-config-operator-system
 spec:
   path: cert
   enableIdentityAliasMetadata: true

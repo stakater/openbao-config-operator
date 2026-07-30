@@ -4,7 +4,11 @@
 # - use the VERSION as arg of the bundle target (e.g make bundle VERSION=0.0.2)
 # - use environment variables to overwrite this value (e.g export VERSION=0.0.2)
 VERSION ?= 0.0.1
-OPERATOR_NAME ?= mto-extension-openbao
+# Must equal the GitHub repository name. Stakater's shared CI derives the image
+# it advertises on the pull request and pulls back during e2e from the
+# repository name alone, so an image pushed under any other name is one nothing
+# downstream can find.
+OPERATOR_NAME ?= openbao-config-operator
 CATALOG_DIR_PATH ?= catalog
 DOCKER_REPO_BASE ?= ghcr.io/stakater
 ifeq ($(strip $(DOCKER_REPO_BASE)),)
@@ -34,7 +38,7 @@ BUNDLE_METADATA_OPTS ?= $(BUNDLE_CHANNELS) $(BUNDLE_DEFAULT_CHANNEL)
 # This variable is used to construct full image tags for bundle and catalog images.
 #
 # For example, running 'make bundle-build bundle-push catalog-build catalog-push' will build and push both
-# stakater.cloud/mto-extension-openbao-bundle:$VERSION and stakater.cloud/mto-extension-openbao-catalog:$VERSION.
+# stakater.cloud/openbao-config-operator-bundle:$VERSION and stakater.cloud/openbao-config-operator-catalog:$VERSION.
 IMAGE_TAG_BASE ?= $(DOCKER_REPO_BASE)/$(OPERATOR_NAME)
 
 # BUNDLE_IMG defines the image:tag used for the bundle.
@@ -58,7 +62,10 @@ OPERATOR_SDK_VERSION ?= v1.41.1
 # Image URL to use all building/pushing image targets
 IMG ?= $(IMAGE_TAG_BASE):v$(VERSION)$(GIT_TAG)
 # ENVTEST_K8S_VERSION refers to the version of kubebuilder assets to be downloaded by envtest binary.
-ENVTEST_K8S_VERSION = 1.31.0
+# Track the apiserver minor that the target OpenShift release ships (4.20 -> 1.33),
+# so unit tests exercise the same API surface production does. Overridable so a
+# skew run can point at another minor without editing this file.
+ENVTEST_K8S_VERSION ?= 1.33.0
 
 # Get the currently used golang install path (in GOPATH/bin, unless GOBIN is set)
 ifeq (,$(shell go env GOBIN))
@@ -124,7 +131,7 @@ test: manifests generate fmt vet envtest ## Run tests.
 	KUBEBUILDER_ASSETS="$(shell $(ENVTEST) use $(ENVTEST_K8S_VERSION) --bin-dir $(LOCALBIN) -p path)" go test $$(go list ./... | grep -v /e2e) -coverprofile cover.out
 
 OPENBAO_NS   ?= openbao
-OPERATOR_NS  ?= mto-extension-openbao-system
+OPERATOR_NS  ?= openbao-config-operator-system
 VAULT_ADDR   ?= http://openbao.$(OPENBAO_NS).svc.cluster.local:8200
 POLICY_FILE  ?= test/policies/obx-e2e-manage.hcl
 TOKEN_SECRET ?= mto-openbao-token
@@ -162,6 +169,7 @@ test-e2e:
 		go test ./test/e2e/ -v -ginkgo.v; \
 	RC=$$?; \
 	kill $$(cat .pf.pid) >/dev/null 2>&1 || true; rm -f .pf.pid; \
+	if [ $$RC -ne 0 ]; then $(MAKE) e2e-diagnostics; fi; \
 	exit $$RC
 
 .PHONY: openbao-install
@@ -240,10 +248,10 @@ PLATFORMS ?= linux/arm64,linux/amd64,linux/s390x,linux/ppc64le
 docker-buildx: ## Build and push docker image for the manager for cross-platform support
 	# copy existing Dockerfile and insert --platform=${BUILDPLATFORM} into Dockerfile.cross, and preserve the original Dockerfile
 	sed -e '1 s/\(^FROM\)/FROM --platform=\$$\{BUILDPLATFORM\}/; t' -e ' 1,// s//FROM --platform=\$$\{BUILDPLATFORM\}/' Dockerfile > Dockerfile.cross
-	- $(CONTAINER_TOOL) buildx create --name mto-extension-openbao-builder
-	$(CONTAINER_TOOL) buildx use mto-extension-openbao-builder
+	- $(CONTAINER_TOOL) buildx create --name openbao-config-operator-builder
+	$(CONTAINER_TOOL) buildx use openbao-config-operator-builder
 	- $(CONTAINER_TOOL) buildx build --push --platform=$(PLATFORMS) --tag ${IMG} -f Dockerfile.cross .
-	- $(CONTAINER_TOOL) buildx rm mto-extension-openbao-builder
+	- $(CONTAINER_TOOL) buildx rm openbao-config-operator-builder
 	rm Dockerfile.cross
 
 .PHONY: build-installer
@@ -270,13 +278,72 @@ uninstall: manifests kustomize ## Uninstall CRDs from the K8s cluster specified 
 load-image: ## Load local image into Kind cluster if it exists locally, otherwise it will be pulled
 	$(MAKE) cluster ACTION=load-image
 
+# Wait for the controller rollout, dumping cluster state to stdout if it stalls
+# and retrying once after a clean restart.
+#
+# The dump goes to stdout rather than to files under e2e-logs/ on purpose: this
+# runs in `deploy`, which is upstream of `test-e2e`, so a failure here aborts the
+# job before any artifact-uploading step is reached. Printing means the evidence
+# lands in the workflow log, where it survives regardless.
+#
+# The retry is not just defensive. A private image on a cold Kind node has no
+# local layer to reuse, and one fixed window gives a slow pull no second chance;
+# ImagePullBackOff also burns through a short window in two or three attempts.
+define rollout-controller-with-retry
+@bash -ceu '\
+	ns="$(OPERATOR_NS)"; \
+	dep="$(OPERATOR_NAME)-controller-manager"; \
+	echo ">>> Waiting for rollout (90s fast path)..."; \
+	if ! $(KUBECTL) -n "$$ns" rollout status deploy/"$$dep" --timeout=90s; then \
+	  echo ">>> Rollout stalled - collecting debug info before restart"; \
+	  echo "---- Deployment describe ----"; \
+	  $(KUBECTL) -n "$$ns" describe deploy/"$$dep" || true; \
+	  echo "---- Pods (wide) ----"; \
+	  $(KUBECTL) -n "$$ns" get pods -l control-plane=controller-manager -o wide || true; \
+	  echo "---- Pod describe (image pull and config errors surface here) ----"; \
+	  $(KUBECTL) -n "$$ns" describe pods -l control-plane=controller-manager || true; \
+	  echo "---- Events (recent 20) ----"; \
+	  $(KUBECTL) -n "$$ns" get events --sort-by=.lastTimestamp | tail -n 20 || true; \
+	  echo "---- Pod logs (last 50, empty if no container started) ----"; \
+	  for p in $$( $(KUBECTL) -n "$$ns" get pods -l control-plane=controller-manager -o name 2>/dev/null ); do \
+	    echo "-- $$p --"; \
+	    $(KUBECTL) -n "$$ns" logs "$$p" --tail=50 2>/dev/null || true; \
+	  done; \
+	  echo ">>> End of debug info"; \
+	  echo ">>> Performing clean restart (scale 0 -> 1)..."; \
+	  $(KUBECTL) -n "$$ns" scale deploy/"$$dep" --replicas=0; \
+	  for i in $$(seq 1 24); do \
+	    cnt="$$( $(KUBECTL) -n "$$ns" get pods -l control-plane=controller-manager --no-headers 2>/dev/null | wc -l | tr -d " " )"; \
+	    [ "$$cnt" = "0" ] && break; \
+	    sleep 5; \
+	  done; \
+	  $(KUBECTL) -n "$$ns" scale deploy/"$$dep" --replicas=1; \
+	  echo ">>> Retrying rollout (210s)..."; \
+	  $(KUBECTL) -n "$$ns" rollout status deploy/"$$dep" --timeout=210s; \
+	fi; \
+	$(KUBECTL) -n "$$ns" wait --for=condition=Available deploy/"$$dep" --timeout=120s; \
+	echo ">>> Deployment $$dep successfully rolled out and ready."; \
+	'
+endef
+
+.PHONY: e2e-diagnostics
+e2e-diagnostics: ## Dump cluster state into ./e2e-logs, which CI uploads as an artifact on failure.
+	mkdir -p e2e-logs
+	-$(KUBECTL) -n $(OPERATOR_NS) get pods -o wide > e2e-logs/operator-pods.txt 2>&1
+	-$(KUBECTL) -n $(OPERATOR_NS) describe pods >> e2e-logs/operator-pods.txt 2>&1
+	-$(KUBECTL) -n $(OPERATOR_NS) logs deploy/$(OPERATOR_NAME)-controller-manager --tail=6000 > e2e-logs/controller.log 2>&1
+	-$(KUBECTL) -n $(OPERATOR_NS) logs deploy/$(OPERATOR_NAME)-controller-manager --previous --tail=3000 > e2e-logs/controller-previous.log 2>&1
+	-$(KUBECTL) -n $(OPENBAO_NS) get pods -o wide > e2e-logs/openbao-pods.txt 2>&1
+	-$(KUBECTL) get events -A --sort-by=.lastTimestamp > e2e-logs/events.txt 2>&1
+	-$(KUBECTL) get openbaopolicies,openbaosecretengines,openbaonamespaces -A -o yaml > e2e-logs/openbao-crs.yaml 2>&1
+
 .PHONY: deploy
 deploy: kustomize setup-cluster openbao-install openbao-provision-creds openbao-bootstrap-auth install
 	cd config/manager && $(KUSTOMIZE) edit set image controller=$(IMG) && \
 	$(KUSTOMIZE) edit set configmap controller-manager-config --from-literal=VAULT_ADDR='$(VAULT_ADDR)' --namespace $(OPERATOR_NS)
 	$(KUSTOMIZE) build config/default | $(KUBECTL) apply -f -
 	$(KUBECTL) wait --for=condition=Established crd/openbaopolicies.security.mto.stakater.com --timeout=60s
-	$(KUBECTL) -n $(OPERATOR_NS) rollout status deployment/mto-extension-openbao-controller-manager --timeout=180s
+	$(call rollout-controller-with-retry)
 
 .PHONY: undeploy
 undeploy: kustomize ## Undeploy controller from the K8s cluster specified in ~/.kube/config. Call with ignore-not-found=true to ignore resource not found errors during deletion.
@@ -318,6 +385,7 @@ CONTROLLER_GEN ?= $(LOCALBIN)/controller-gen
 ENVTEST ?= $(LOCALBIN)/setup-envtest
 GOLANGCI_LINT = $(LOCALBIN)/golangci-lint
 HELM ?= $(shell command -v helm || echo $(PWD)/bin/helm)
+HELMIFY ?= $(LOCALBIN)/helmify
 KIND ?= $(LOCALBIN)/kind
 
 ## Tool Versions
@@ -325,6 +393,7 @@ KUSTOMIZE_VERSION ?= v5.4.3
 CONTROLLER_TOOLS_VERSION ?= v0.19.0
 ENVTEST_VERSION ?= release-0.19
 GOLANGCI_LINT_VERSION ?= v1.64.4
+HELMIFY_VERSION ?= v0.4.20
 KIND_VERSION ?= v0.30.0
 
 .PHONY: kustomize
@@ -398,8 +467,17 @@ download-helm-mk: ## Download shared helm.mk if missing.
 		curl -fsSL $(HELM_MK_URL) -o $(HELM_MK); \
 	fi
 
+# helm.mk logs in to ghcr.io with GIT_USER/GIT_TOKEN; the CI chart-push action only
+# exports GHCR_USERNAME/GHCR_TOKEN, so fall back to those when GIT_* is unset.
+GIT_USER  ?= $(GHCR_USERNAME)
+GIT_TOKEN ?= $(GHCR_TOKEN)
+
 HELM_MK_CMD = GOBIN=$(LOCALBIN) PATH="$(LOCALBIN):$$PATH" $(MAKE) -f $(HELM_MK)
+# helm.mk references $(KUSTOMIZE) but never defines it, so it has to be passed in.
 HELM_MK_ARGS = \
+	KUSTOMIZE=$(KUSTOMIZE) \
+	GIT_USER=$(GIT_USER) \
+	GIT_TOKEN=$(GIT_TOKEN) \
 	OPERATOR_NAME=$(OPERATOR_NAME) \
 	HELM_CHART_NAME=$(HELM_CHART_NAME) \
 	HELM_CHART_DIR=$(HELM_CHART_DIR) \
@@ -412,8 +490,8 @@ HELM_MK_ARGS = \
 helm-release: helm-release-operator helm-release-mto-bootstrap helm-release-mto ## Release operator + mto-bootstrap + mto charts to OCI.
 
 .PHONY: helm-release-operator
-helm-release-operator: helmify kustomize download-helm-mk ## Helmify config/default and release the operator chart.
-	$(HELM_MK_CMD) helm-release $(HELM_MK_ARGS)
+helm-release-operator: helmify kustomize yq download-helm-mk ## Helmify config/default and release the operator chart.
+	@$(HELM_MK_CMD) helm-release $(HELM_MK_ARGS)
 
 .PHONY: helm-release-mto-bootstrap
 helm-release-mto-bootstrap: helm ## Lint, package and push openbao-config-mto-bootstrap.
@@ -433,6 +511,10 @@ helm-release-mto: helm ## Lint, package and push openbao-config-mto (per-Tenant 
 helm-lint: helm ## Lint the two hand-maintained charts (operator chart is auto-generated).
 	$(HELM) lint $(MTO_BOOTSTRAP_CHART_DIR) --strict
 	$(HELM) lint $(MTO_CHART_DIR) --strict --set tenant=lint-only
+
+.PHONY: helm-render-test
+helm-render-test: helm yq ## Verify the tenant chart's component slices (golden, disjoint, union, purity).
+	HELM=$(HELM) YQ=$(YQ_BIN) hack/chart-render-tests.sh
 
 # go-install-tool will 'go install' any package with custom target and name of binary, if it doesn't exist
 # $1 - target path with name of binary
@@ -500,7 +582,8 @@ endif
 endif
 
 .PHONY: yq
-YQ_VERSION := v4.13.0
+# hack/chart-render-tests.sh needs the splitDoc operator (yq >= 4.25).
+YQ_VERSION := v4.44.3
 YQ_BIN := $(LOCALBIN)/yq
 yq:
 ifeq (,$(wildcard $(YQ_BIN)))

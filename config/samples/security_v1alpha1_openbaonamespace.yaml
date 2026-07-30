@@ -2,7 +2,7 @@ apiVersion: security.mto.stakater.com/v1alpha1
 kind: OpenBaoNamespace
 metadata:
   name: acme
-  namespace: mto-extension-openbao-system
+  namespace: openbao-config-operator-system
 spec:
   # spec.name defaults to metadata.name; set it if the bao-side name
   # must differ from the Kubernetes resource name.
@@ -14,7 +14,7 @@ apiVersion: security.mto.stakater.com/v1alpha1
 kind: OpenBaoNamespace
 metadata:
   name: acme-sub
-  namespace: mto-extension-openbao-system
+  namespace: openbao-config-operator-system
 spec:
   name: sub
   openbaoNamespace: acme/

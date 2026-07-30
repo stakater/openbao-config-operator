@@ -3,7 +3,7 @@ set -euo pipefail
 
 # ---- Inputs ----
 OPENBAO_NS=${OPENBAO_NS:-openbao}
-OPERATOR_NS=${OPERATOR_NS:-mto-extension-openbao-system}
+OPERATOR_NS=${OPERATOR_NS:-openbao-config-operator-system}
 VAULT_ADDR=${VAULT_ADDR:-http://openbao.${OPENBAO_NS}.svc.cluster.local:8200}
 VAULT_TOKEN=${VAULT_TOKEN:-root}
 POLICY_NAME=${POLICY_NAME:-obx-e2e-manage}

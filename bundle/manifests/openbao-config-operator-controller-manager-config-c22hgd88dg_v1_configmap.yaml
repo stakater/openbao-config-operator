@@ -3,4 +3,4 @@ data:
   VAULT_ADDR: http://openbao.openbao.svc.cluster.local:8200
 kind: ConfigMap
 metadata:
-  name: mto-extension-openbao-controller-manager-config-c22hgd88dg
+  name: openbao-config-operator-controller-manager-config-c22hgd88dg

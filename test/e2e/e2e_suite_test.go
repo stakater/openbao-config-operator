@@ -36,7 +36,7 @@ var OperatorNS string
 
 func TestE2E(t *testing.T) {
 	RegisterFailHandler(Fail)
-	_, _ = fmt.Fprintf(GinkgoWriter, "Starting mto-extension-openbao suite\n")
+	_, _ = fmt.Fprintf(GinkgoWriter, "Starting openbao-config-operator suite\n")
 	RunSpecs(t, "e2e suite")
 }
 

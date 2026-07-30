@@ -3,9 +3,11 @@ kind: Service
 metadata:
   labels:
     control-plane: controller-manager
-    app.kubernetes.io/name: mto-extension-openbao
+    app.kubernetes.io/name: openbao-config-operator
     app.kubernetes.io/managed-by: kustomize
-  name: controller-manager-metrics-service
+  # Kept short: the Helm chart prefixes this with the release name, and
+  # "<release>-openbao-config-operator-..." has to stay inside 63 characters.
+  name: metrics-service
   namespace: system
 spec:
   ports:

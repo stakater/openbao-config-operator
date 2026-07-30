@@ -19,10 +19,10 @@ For local development and testing, you can build and push the operator image dir
 3. Add a version entry to `catalog/channels.yaml` following OLM upgrade specifications:
    ```yaml
    entries:
-   - name: mto-extension-openbao.v0.0.1
-   - name: mto-extension-openbao.v0.0.2 # This is the next version to be released
+   - name: openbao-config-operator.v0.0.1
+   - name: openbao-config-operator.v0.0.2 # This is the next version to be released
      skips:
-      - mto-extension-openbao.v0.0.1
+      - openbao-config-operator.v0.0.1
       ```
 4. Render, build, and push the catalog index:
    ```sh
@@ -39,10 +39,10 @@ A catalog release is triggered if:
 - A new version entry is specified in `catalog/channels.yaml,` indicating the upcoming release.
   ```yaml
   entries:
-  - name: mto-extension-openbao.v0.0.1
-  - name: mto-extension-openbao.v0.0.2 # This is the next version to be released
+  - name: openbao-config-operator.v0.0.1
+  - name: openbao-config-operator.v0.0.2 # This is the next version to be released
     skips:
-    - mto-extension-openbao.v0.0.1
+    - openbao-config-operator.v0.0.1
   ```
 
 ## Working with Entries in `catalog/channels.yaml`
@@ -67,10 +67,10 @@ Example:
 
 ```yaml
 entries:
-- name: mto-extension-openbao.v0.0.3
+- name: openbao-config-operator.v0.0.3
   skips:
-   - mto-extension-openbao.v0.0.1
-   - mto-extension-openbao.v0.0.2
+   - openbao-config-operator.v0.0.1
+   - openbao-config-operator.v0.0.2
 ```
 #### Breaking API Changes (Use replaces)
 For breaking API changes, the replaces field is used to specify which previous version is being replaced. This indicates to OLM that the older version should be upgraded to the new version.
@@ -78,18 +78,18 @@ Example:
 
 ```yaml
 entries:
-- name: mto-extension-openbao.v0.0.3
-  replaces: mto-extension-openbao.v0.0.1
+- name: openbao-config-operator.v0.0.3
+  replaces: openbao-config-operator.v0.0.1
 ```
 
 ## Contributing
 1. Add the next version entry in `catalog/channels.yaml`:
    ```yaml
    entries:
-      - name: mto-extension-openbao.v{{CURRENT}}
-      - name: mto-extension-openbao.v{{NEXT}}
+      - name: openbao-config-operator.v{{CURRENT}}
+      - name: openbao-config-operator.v{{NEXT}}
         skips:
-          - mto-extension-openbao.v0.0.1
+          - openbao-config-operator.v0.0.1
    ```
 2. Create a PR and run tests.
 3. Merging the PR will trigger the build and push the releases.

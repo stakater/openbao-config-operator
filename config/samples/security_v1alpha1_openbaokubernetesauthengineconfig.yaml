@@ -11,7 +11,7 @@ apiVersion: security.mto.stakater.com/v1alpha1
 kind: OpenBaoKubernetesAuthEngineConfig
 metadata:
   name: tenant-k8s-auth
-  namespace: mto-extension-openbao-system
+  namespace: openbao-config-operator-system
 spec:
   path: kubernetes
   # Optional: scope this CR to a specific OpenBao namespace.

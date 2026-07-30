@@ -8,6 +8,6 @@ layout:
 plugins:
   manifests.sdk.operatorframework.io/v2: {}
   scorecard.sdk.operatorframework.io/v2: {}
-projectName: mto-extension-openbao
+projectName: openbao-config-operator
 repo: github.com/stakater-ab/mto-extension-openbao
 version: "3"

@@ -3,7 +3,7 @@ apiVersion: security.mto.stakater.com/v1alpha1
 kind: OpenBaoGroup
 metadata:
   name: platform-admins
-  namespace: mto-extension-openbao-system
+  namespace: openbao-config-operator-system
 spec:
   type: internal
   policies:
@@ -21,7 +21,7 @@ apiVersion: security.mto.stakater.com/v1alpha1
 kind: OpenBaoGroup
 metadata:
   name: oidc-admins
-  namespace: mto-extension-openbao-system
+  namespace: openbao-config-operator-system
 spec:
   type: external
   policies:

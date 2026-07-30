@@ -1,6 +1,6 @@
 <!-- markdownlint-disable MD013 -->
 
-# mto-extension-openbao
+# openbao-config-operator
 
 MTO OpenBao Extension
 
@@ -89,12 +89,12 @@ one via `bao operator generate-root`.
 ```bash
 # the operator got in. --tail=-1 is required: with a selector, kubectl
 # defaults to the last 10 lines and the login line scrolls out of range.
-kubectl -n mto-extension-openbao-system logs -l control-plane=controller-manager --tail=-1 \
+kubectl -n openbao-config-operator-system logs -l control-plane=controller-manager --tail=-1 \
   | grep "bao login"
 # want: INFO bao-auth bao login succeeded {"reason": "expiry", "leaseSeconds": 3600}
 
 # no stored credential in the pod spec
-kubectl -n mto-extension-openbao-system get deploy mto-extension-openbao-controller-manager -o json \
+kubectl -n openbao-config-operator-system get deploy openbao-config-operator-controller-manager -o json \
   | jq '[.spec.template.spec.containers[0].env[].name | select(. == "VAULT_TOKEN" or . == "BAO_TOKEN")]'
 # want: []
 ```
@@ -117,9 +117,9 @@ To move an existing install off it:
 4. **Revoke the old token, then delete the Secret:**
 
    ```bash
-   OLD=$(kubectl -n mto-extension-openbao-system get secret mto-openbao-token -o jsonpath='{.data.token}' | base64 -d)
+   OLD=$(kubectl -n openbao-config-operator-system get secret mto-openbao-token -o jsonpath='{.data.token}' | base64 -d)
    VAULT_TOKEN=${OLD} bao token revoke -self
-   kubectl -n mto-extension-openbao-system delete secret mto-openbao-token
+   kubectl -n openbao-config-operator-system delete secret mto-openbao-token
    ```
 
    If that Secret holds the root token itself rather than a scoped one, `revoke

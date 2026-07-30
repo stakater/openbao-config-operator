@@ -17,12 +17,12 @@ set -euo pipefail
 
 # ---- Inputs ----
 OPENBAO_NS=${OPENBAO_NS:-openbao}
-OPERATOR_NS=${OPERATOR_NS:-mto-extension-openbao-system}
+OPERATOR_NS=${OPERATOR_NS:-openbao-config-operator-system}
 VAULT_ADDR=${VAULT_ADDR:-http://openbao.${OPENBAO_NS}.svc.cluster.local:8200}
 VAULT_TOKEN=${VAULT_TOKEN:-root}
 AUTH_MOUNT=${AUTH_MOUNT:-k8s-operator}
-OPERATOR_ROLE=${OPERATOR_ROLE:-mto-extension-openbao}
-OPERATOR_SA=${OPERATOR_SA:-mto-extension-openbao-controller-manager}
+OPERATOR_ROLE=${OPERATOR_ROLE:-openbao-config-operator}
+OPERATOR_SA=${OPERATOR_SA:-openbao-config-operator-controller-manager}
 POLICY_NAME=${POLICY_NAME:-operator-manage}
 POLICY_FILE=${POLICY_FILE:-hack/e2e/openbao/operator-policy.hcl}
 TOKEN_TTL=${TOKEN_TTL:-1h}
@@ -192,7 +192,7 @@ else
   DEP_ROLE=$(printf '%s' "${DEPLOY_JSON}" | jq -r \
     '.spec.template.spec.containers[0].env[]? | select(.name=="BAO_AUTH_ROLE") | .value' || true)
   DEP_MOUNT=${DEP_MOUNT:-k8s-operator}
-  DEP_ROLE=${DEP_ROLE:-mto-extension-openbao}
+  DEP_ROLE=${DEP_ROLE:-openbao-config-operator}
 
   [ -n "${DEP_AUD}" ] || {
     echo "The Deployment projects no audience-bound ServiceAccount token, so its" >&2

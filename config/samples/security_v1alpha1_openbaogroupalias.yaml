@@ -6,7 +6,7 @@ apiVersion: security.mto.stakater.com/v1alpha1
 kind: OpenBaoGroupAlias
 metadata:
   name: alice-oidc-admin
-  namespace: mto-extension-openbao-system
+  namespace: openbao-config-operator-system
 spec:
   name: alice@example.com
   mountAccessor: REPLACE_ME_WITH_OIDC_ACCESSOR

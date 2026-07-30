@@ -4,7 +4,7 @@ metadata:
   annotations:
     alm-examples: '[]'
     capabilities: Basic Install
-  name: mto-extension-openbao.v0.0.0
+  name: openbao-config-operator.v0.0.0
   namespace: placeholder
 spec:
   apiservicedefinitions: {}
@@ -178,7 +178,7 @@ spec:
   - Tenancy
   links:
   - name: Mto Extension Openbao
-    url: https://mto-extension-openbao.domain
+    url: https://openbao-config-operator.domain
   maintainers:
   - email: hello@stakater.com
     name: Stakater

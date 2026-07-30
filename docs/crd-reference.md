@@ -41,7 +41,7 @@ apiVersion: security.mto.stakater.com/v1alpha1
 kind: OpenBaoPolicy
 metadata:
   name: secret-reader
-  namespace: mto-extension-openbao-system
+  namespace: openbao-config-operator-system
 spec:
   policy: |
     path "secret/data/public/*" {
@@ -113,7 +113,7 @@ apiVersion: security.mto.stakater.com/v1alpha1
 kind: OpenBaoKubernetesAuthRole
 metadata:
   name: team-a-readers
-  namespace: mto-extension-openbao-system
+  namespace: openbao-config-operator-system
 spec:
   path: kubernetes
   policies:
@@ -210,7 +210,7 @@ apiVersion: security.mto.stakater.com/v1alpha1
 kind: OpenBaoSecretEngine
 metadata:
   name: secret-kv
-  namespace: mto-extension-openbao-system
+  namespace: openbao-config-operator-system
 spec:
   path: secret
   description: cluster-shared kv-v2
@@ -287,7 +287,7 @@ apiVersion: security.mto.stakater.com/v1alpha1
 kind: OpenBaoPKISecretEngineConfig
 metadata:
   name: pki-root
-  namespace: mto-extension-openbao-system
+  namespace: openbao-config-operator-system
 spec:
   path: pki-root
   type: root
@@ -306,7 +306,7 @@ apiVersion: security.mto.stakater.com/v1alpha1
 kind: OpenBaoPKISecretEngineConfig
 metadata:
   name: pki-int
-  namespace: mto-extension-openbao-system
+  namespace: openbao-config-operator-system
 spec:
   path: pki-int
   type: intermediate
@@ -391,7 +391,7 @@ apiVersion: security.mto.stakater.com/v1alpha1
 kind: OpenBaoPKISecretEngineRole
 metadata:
   name: web-server
-  namespace: mto-extension-openbao-system
+  namespace: openbao-config-operator-system
 spec:
   path: pki
   allowedDomains: ["*.demo.example.com"]
@@ -457,7 +457,7 @@ apiVersion: security.mto.stakater.com/v1alpha1
 kind: OpenBaoGroup
 metadata:
   name: platform-admins
-  namespace: mto-extension-openbao-system
+  namespace: openbao-config-operator-system
 spec:
   type: internal
   policies:
@@ -528,7 +528,7 @@ apiVersion: security.mto.stakater.com/v1alpha1
 kind: OpenBaoGroupAlias
 metadata:
   name: alice-oidc-admin
-  namespace: mto-extension-openbao-system
+  namespace: openbao-config-operator-system
 spec:
   name: alice@example.com
   mountAccessor: auth_oidc_abc123
@@ -606,7 +606,7 @@ apiVersion: security.mto.stakater.com/v1alpha1
 kind: OpenBaoIdentityTokenRole
 metadata:
   name: aws-tokens
-  namespace: mto-extension-openbao-system
+  namespace: openbao-config-operator-system
 spec:
   key: platform
   clientId: arn:aws:iam::123456789012:role/openbao-federated
@@ -678,7 +678,7 @@ apiVersion: security.mto.stakater.com/v1alpha1
 kind: OpenBaoAuthMethod
 metadata:
   name: tenant-oidc
-  namespace: mto-extension-openbao-system
+  namespace: openbao-config-operator-system
 spec:
   path: oidc
   type: oidc
@@ -966,7 +966,7 @@ apiVersion: security.mto.stakater.com/v1alpha1
 kind: OpenBaoKubernetesAuthEngineConfig
 metadata:
   name: tenant-k8s-auth
-  namespace: mto-extension-openbao-system
+  namespace: openbao-config-operator-system
 spec:
   path: kubernetes
   kubernetesHost: https://kubernetes.default.svc:443

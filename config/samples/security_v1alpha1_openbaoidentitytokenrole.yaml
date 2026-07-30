@@ -5,7 +5,7 @@ apiVersion: security.mto.stakater.com/v1alpha1
 kind: OpenBaoIdentityTokenRole
 metadata:
   name: aws-tokens
-  namespace: mto-extension-openbao-system
+  namespace: openbao-config-operator-system
 spec:
   key: platform
   clientId: arn:aws:iam::123456789012:role/openbao-federated

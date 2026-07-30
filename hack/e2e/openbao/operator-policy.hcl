@@ -1,4 +1,4 @@
-# operator-manage — the least-privilege policy for the mto-extension-openbao
+# operator-manage — the least-privilege policy for the openbao-config-operator
 # operator's own bao identity. Derived from the operator's API surface
 # (internal/client Client interface); test/policies/obx-e2e-manage.hcl is the
 # e2e-harness superset of this file.

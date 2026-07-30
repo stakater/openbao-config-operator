@@ -10,7 +10,7 @@ apiVersion: security.mto.stakater.com/v1alpha1
 kind: OpenBaoCertAuthEngineRole
 metadata:
   name: team-a-mtls
-  namespace: mto-extension-openbao-system
+  namespace: openbao-config-operator-system
 spec:
   path: cert
   certificateRef:

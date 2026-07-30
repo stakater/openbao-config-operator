@@ -2,7 +2,7 @@ apiVersion: security.mto.stakater.com/v1alpha1
 kind: OpenBaoKubernetesAuthRole
 metadata:
   name: team-a-readers
-  namespace: mto-extension-openbao-system
+  namespace: openbao-config-operator-system
 spec:
   path: kubernetes
   policies:

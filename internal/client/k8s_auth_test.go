@@ -227,7 +227,7 @@ func TestNewKubernetesAuthClient_LoginRequestShape(t *testing.T) {
 	}))
 	t.Cleanup(srv.Close)
 
-	c, err := NewKubernetesAuthClient(srv.URL, "k8s-operator", "mto-extension-openbao", jwtPath)
+	c, err := NewKubernetesAuthClient(srv.URL, "k8s-operator", "openbao-config-operator", jwtPath)
 	require.NoError(t, err)
 
 	body, err := c.GetPolicy(context.Background(), "team-a")
@@ -240,7 +240,7 @@ func TestNewKubernetesAuthClient_LoginRequestShape(t *testing.T) {
 	require.Empty(t, gotLoginToken,
 		"the login runs on the same client as every other call, so authTransport must exempt "+
 			"the login path: injecting a token here would re-enter the cache the login is filling")
-	require.Equal(t, "mto-extension-openbao", gotBody["role"])
+	require.Equal(t, "openbao-config-operator", gotBody["role"])
 	require.Equal(t, "sa-jwt-content", gotBody["jwt"], "JWT must be read from the file and trimmed")
 
 	// Second call reuses the cached token — no extra login.

@@ -28,7 +28,7 @@ var authLog = logf.Log.WithName("bao-auth")
 
 const (
 	defaultAuthMount = "k8s-operator"
-	defaultAuthRole  = "mto-extension-openbao"
+	defaultAuthRole  = "openbao-config-operator"
 	// defaultJWTPath is where the deployment mounts the projected
 	// ServiceAccount token (audience-bound to bao, distinct from the
 	// default API-server audience).

@@ -3,27 +3,3537 @@ kind: Namespace
 metadata:
   labels:
     app.kubernetes.io/managed-by: kustomize
-    app.kubernetes.io/name: mto-extension-openbao
+    app.kubernetes.io/name: openbao-config-operator
     control-plane: controller-manager
-  name: mto-extension-openbao-system
+  name: openbao-config-operator-system
+---
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  annotations:
+    controller-gen.kubebuilder.io/version: v0.19.0
+  name: openbaoauthmethods.security.mto.stakater.com
+spec:
+  group: security.mto.stakater.com
+  names:
+    kind: OpenBaoAuthMethod
+    listKind: OpenBaoAuthMethodList
+    plural: openbaoauthmethods
+    shortNames:
+    - obam
+    singular: openbaoauthmethod
+  scope: Namespaced
+  versions:
+  - name: v1alpha1
+    schema:
+      openAPIV3Schema:
+        description: |-
+          OpenBaoAuthMethod is the Schema for the openbaoauthmethods API.
+          Reconciles a CR to a bao-side auth-method mount at sys/auth/<path>.
+        properties:
+          apiVersion:
+            description: |-
+              APIVersion defines the versioned schema of this representation of an object.
+              Servers should convert recognized schemas to the latest internal value, and
+              may reject unrecognized values.
+              More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources
+            type: string
+          kind:
+            description: |-
+              Kind is a string value representing the REST resource this object represents.
+              Servers may infer this from the endpoint the client submits requests to.
+              Cannot be updated.
+              In CamelCase.
+              More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds
+            type: string
+          metadata:
+            type: object
+          spec:
+            description: OpenBaoAuthMethodSpec defines the desired state of OpenBaoAuthMethod.
+            properties:
+              config:
+                description: |-
+                  Config holds the tunable mount-config fields bao exposes on
+                  the /tune endpoint.
+                properties:
+                  defaultLeaseTtl:
+                    description: DefaultLeaseTTL is a bao duration string ("1h", "3600s").
+                    pattern: ^([0-9]+(ns|us|ms|s|m|h|d))+$
+                    type: string
+                  listingVisibility:
+                    description: |-
+                      ListingVisibility controls whether unauthenticated users can
+                      see this mount in the bao UI listing. "" (default) or "hidden"
+                      — bao only accepts these two values.
+                    enum:
+                    - unauth
+                    - hidden
+                    type: string
+                  maxLeaseTtl:
+                    description: MaxLeaseTTL is a bao duration string ("1h", "3600s").
+                    pattern: ^([0-9]+(ns|us|ms|s|m|h|d))+$
+                    type: string
+                type: object
+              description:
+                description: |-
+                  Description is the bao-side mount description. Free-form;
+                  mirrored verbatim into bao's mount info.
+                maxLength: 512
+                type: string
+              openbaoNamespace:
+                description: OpenBaoNamespace targets a specific OpenBao namespace.
+                pattern: ^([a-z0-9]([-a-z0-9/]*[a-z0-9])?/?)?$
+                type: string
+              path:
+                description: |-
+                  Path is the bao-side auth-mount path (e.g. "cert", "jwt",
+                  "oidc"). Trailing slashes are accepted but stripped before the
+                  bao API call.
+                maxLength: 128
+                minLength: 1
+                pattern: ^[a-zA-Z0-9][a-zA-Z0-9_./-]*$
+                type: string
+              type:
+                description: |-
+                  Type is the auth-method type as bao expects on the wire.
+                  Mutable through CR re-creation only — bao does not allow type
+                  to change in place.
+                enum:
+                - cert
+                - jwt
+                - oidc
+                - kubernetes
+                - approle
+                - userpass
+                - ldap
+                type: string
+            required:
+            - path
+            - type
+            type: object
+          status:
+            description: OpenBaoAuthMethodStatus defines the observed state.
+            properties:
+              baoWritten:
+                type: boolean
+              conditions:
+                items:
+                  description: Condition contains details for one aspect of the current
+                    state of this API Resource.
+                  properties:
+                    lastTransitionTime:
+                      description: |-
+                        lastTransitionTime is the last time the condition transitioned from one status to another.
+                        This should be when the underlying condition changed.  If that is not known, then using the time when the API field changed is acceptable.
+                      format: date-time
+                      type: string
+                    message:
+                      description: |-
+                        message is a human readable message indicating details about the transition.
+                        This may be an empty string.
+                      maxLength: 32768
+                      type: string
+                    observedGeneration:
+                      description: |-
+                        observedGeneration represents the .metadata.generation that the condition was set based upon.
+                        For instance, if .metadata.generation is currently 12, but the .status.conditions[x].observedGeneration is 9, the condition is out of date
+                        with respect to the current state of the instance.
+                      format: int64
+                      minimum: 0
+                      type: integer
+                    reason:
+                      description: |-
+                        reason contains a programmatic identifier indicating the reason for the condition's last transition.
+                        Producers of specific condition types may define expected values and meanings for this field,
+                        and whether the values are considered a guaranteed API.
+                        The value should be a CamelCase string.
+                        This field may not be empty.
+                      maxLength: 1024
+                      minLength: 1
+                      pattern: ^[A-Za-z]([A-Za-z0-9_,:]*[A-Za-z0-9_])?$
+                      type: string
+                    status:
+                      description: status of the condition, one of True, False, Unknown.
+                      enum:
+                      - "True"
+                      - "False"
+                      - Unknown
+                      type: string
+                    type:
+                      description: type of condition in CamelCase or in foo.example.com/CamelCase.
+                      maxLength: 316
+                      pattern: ^([a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*/)?(([A-Za-z0-9][-A-Za-z0-9_.]*)?[A-Za-z0-9])$
+                      type: string
+                  required:
+                  - lastTransitionTime
+                  - message
+                  - reason
+                  - status
+                  - type
+                  type: object
+                type: array
+                x-kubernetes-list-map-keys:
+                - type
+                x-kubernetes-list-type: map
+              lastWrittenBaoName:
+                type: string
+              lastWrittenOpenBaoNamespace:
+                type: string
+              mountAccessor:
+                description: |-
+                  MountAccessor is the bao-side accessor of this auth mount.
+                  Auth-method aliases (OIDC sub, JWT subject, cert CN) and
+                  identity-group aliases bind by `mount_accessor`, so surfacing
+                  it on status lets downstream CRs (notably OpenBaoGroupAlias)
+                  reference the accessor without a manual `bao auth list` step.
+                type: string
+            type: object
+        type: object
+    served: true
+    storage: true
+    subresources:
+      status: {}
+---
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  annotations:
+    controller-gen.kubebuilder.io/version: v0.19.0
+  name: openbaocertauthengineconfigs.security.mto.stakater.com
+spec:
+  group: security.mto.stakater.com
+  names:
+    kind: OpenBaoCertAuthEngineConfig
+    listKind: OpenBaoCertAuthEngineConfigList
+    plural: openbaocertauthengineconfigs
+    shortNames:
+    - obcac
+    singular: openbaocertauthengineconfig
+  scope: Namespaced
+  versions:
+  - name: v1alpha1
+    schema:
+      openAPIV3Schema:
+        description: |-
+          OpenBaoCertAuthEngineConfig is the Schema for the
+          openbaocertauthengineconfigs API.
+        properties:
+          apiVersion:
+            description: |-
+              APIVersion defines the versioned schema of this representation of an object.
+              Servers should convert recognized schemas to the latest internal value, and
+              may reject unrecognized values.
+              More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources
+            type: string
+          kind:
+            description: |-
+              Kind is a string value representing the REST resource this object represents.
+              Servers may infer this from the endpoint the client submits requests to.
+              Cannot be updated.
+              In CamelCase.
+              More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds
+            type: string
+          metadata:
+            type: object
+          spec:
+            description: OpenBaoCertAuthEngineConfigSpec defines the desired state.
+            properties:
+              disableBinding:
+                description: |-
+                  DisableBinding turns off cert binding to a specific identity
+                  alias.
+                type: boolean
+              enableIdentityAliasMetadata:
+                description: |-
+                  EnableIdentityAliasMetadata controls whether bao copies the
+                  cert subject + serial onto the identity alias metadata.
+                type: boolean
+              ocspCacheSize:
+                description: |-
+                  OCSPCacheSize sets the cache size (in entries) for the OCSP
+                  response cache. Bao's default is 100.
+                minimum: 0
+                type: integer
+              ocspFailOpen:
+                description: |-
+                  OCSPFailOpen treats unreachable OCSP responders as a successful
+                  validation when true. Defaults to bao's setting (typically false).
+                type: boolean
+              ocspQueryAllServers:
+                description: |-
+                  OCSPQueryAllServers queries every OCSP responder in parallel
+                  rather than the first that responds.
+                type: boolean
+              openbaoNamespace:
+                description: OpenBaoNamespace targets a specific OpenBao namespace.
+                pattern: ^([a-z0-9]([-a-z0-9/]*[a-z0-9])?/?)?$
+                type: string
+              path:
+                description: |-
+                  Path is the bao-side cert auth mount path (e.g. "cert").
+                  Pairs with an OpenBaoAuthMethod of type=cert at the same path.
+                maxLength: 128
+                minLength: 1
+                pattern: ^[a-zA-Z0-9][a-zA-Z0-9_./-]*$
+                type: string
+            required:
+            - path
+            type: object
+          status:
+            description: OpenBaoCertAuthEngineConfigStatus defines the observed state.
+            properties:
+              baoWritten:
+                type: boolean
+              conditions:
+                items:
+                  description: Condition contains details for one aspect of the current
+                    state of this API Resource.
+                  properties:
+                    lastTransitionTime:
+                      description: |-
+                        lastTransitionTime is the last time the condition transitioned from one status to another.
+                        This should be when the underlying condition changed.  If that is not known, then using the time when the API field changed is acceptable.
+                      format: date-time
+                      type: string
+                    message:
+                      description: |-
+                        message is a human readable message indicating details about the transition.
+                        This may be an empty string.
+                      maxLength: 32768
+                      type: string
+                    observedGeneration:
+                      description: |-
+                        observedGeneration represents the .metadata.generation that the condition was set based upon.
+                        For instance, if .metadata.generation is currently 12, but the .status.conditions[x].observedGeneration is 9, the condition is out of date
+                        with respect to the current state of the instance.
+                      format: int64
+                      minimum: 0
+                      type: integer
+                    reason:
+                      description: |-
+                        reason contains a programmatic identifier indicating the reason for the condition's last transition.
+                        Producers of specific condition types may define expected values and meanings for this field,
+                        and whether the values are considered a guaranteed API.
+                        The value should be a CamelCase string.
+                        This field may not be empty.
+                      maxLength: 1024
+                      minLength: 1
+                      pattern: ^[A-Za-z]([A-Za-z0-9_,:]*[A-Za-z0-9_])?$
+                      type: string
+                    status:
+                      description: status of the condition, one of True, False, Unknown.
+                      enum:
+                      - "True"
+                      - "False"
+                      - Unknown
+                      type: string
+                    type:
+                      description: type of condition in CamelCase or in foo.example.com/CamelCase.
+                      maxLength: 316
+                      pattern: ^([a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*/)?(([A-Za-z0-9][-A-Za-z0-9_.]*)?[A-Za-z0-9])$
+                      type: string
+                  required:
+                  - lastTransitionTime
+                  - message
+                  - reason
+                  - status
+                  - type
+                  type: object
+                type: array
+                x-kubernetes-list-map-keys:
+                - type
+                x-kubernetes-list-type: map
+              lastWrittenBaoName:
+                type: string
+              lastWrittenOpenBaoNamespace:
+                type: string
+            type: object
+        type: object
+    served: true
+    storage: true
+    subresources:
+      status: {}
+---
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  annotations:
+    controller-gen.kubebuilder.io/version: v0.19.0
+  name: openbaocertauthengineroles.security.mto.stakater.com
+spec:
+  group: security.mto.stakater.com
+  names:
+    kind: OpenBaoCertAuthEngineRole
+    listKind: OpenBaoCertAuthEngineRoleList
+    plural: openbaocertauthengineroles
+    shortNames:
+    - obcar
+    singular: openbaocertauthenginerole
+  scope: Namespaced
+  versions:
+  - name: v1alpha1
+    schema:
+      openAPIV3Schema:
+        description: |-
+          OpenBaoCertAuthEngineRole is the Schema for the
+          openbaocertauthengineroles API.
+        properties:
+          apiVersion:
+            description: |-
+              APIVersion defines the versioned schema of this representation of an object.
+              Servers should convert recognized schemas to the latest internal value, and
+              may reject unrecognized values.
+              More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources
+            type: string
+          kind:
+            description: |-
+              Kind is a string value representing the REST resource this object represents.
+              Servers may infer this from the endpoint the client submits requests to.
+              Cannot be updated.
+              In CamelCase.
+              More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds
+            type: string
+          metadata:
+            type: object
+          spec:
+            description: OpenBaoCertAuthEngineRoleSpec defines the desired state.
+            properties:
+              allowedCommonNames:
+                description: AllowedCommonNames restricts presented certs by Subject
+                  CN.
+                items:
+                  type: string
+                type: array
+              allowedDnsSans:
+                description: AllowedDNSSANs restricts presented certs by DNS SAN.
+                items:
+                  type: string
+                type: array
+              allowedEmailSans:
+                description: AllowedEmailSANs restricts presented certs by email SAN.
+                items:
+                  type: string
+                type: array
+              allowedNames:
+                description: |-
+                  AllowedNames is a glob-pattern allow-list bao matches against
+                  the SAN-or-CN of the presented client cert. Empty means no
+                  filter on this dimension.
+                items:
+                  type: string
+                type: array
+              allowedOrganizations:
+                description: |-
+                  AllowedOrganizations restricts presented certs by Subject
+                  Organisation (O) attribute.
+                items:
+                  type: string
+                type: array
+              allowedUriSans:
+                description: AllowedURISANs restricts presented certs by URI SAN.
+                items:
+                  type: string
+                type: array
+              certificateRef:
+                description: |-
+                  CertificateRef points at a Kubernetes Secret containing the
+                  trusted CA bundle in PEM form. Required — bao rejects a cert
+                  auth role with no certificate.
+                properties:
+                  key:
+                    description: |-
+                      Key within the Secret that holds the PEM bundle. Defaults to
+                      "ca.crt" when empty.
+                    type: string
+                  name:
+                    description: Name of the Secret holding the trusted CA bundle.
+                    minLength: 1
+                    type: string
+                  namespace:
+                    description: |-
+                      Namespace of the Secret. Defaults to this CR's namespace when
+                      empty.
+                    type: string
+                required:
+                - name
+                type: object
+              displayName:
+                description: DisplayName is bao's free-form label for the cert entry.
+                maxLength: 512
+                type: string
+              name:
+                description: |-
+                  Name is the bao-side role name (the cert entry name). Defaults
+                  to metadata.name.
+                pattern: ^[a-z0-9]([-a-z0-9]*[a-z0-9])?$
+                type: string
+              openbaoNamespace:
+                description: OpenBaoNamespace targets a specific OpenBao namespace.
+                pattern: ^([a-z0-9]([-a-z0-9/]*[a-z0-9])?/?)?$
+                type: string
+              path:
+                description: |-
+                  Path is the bao-side cert auth mount (e.g. "cert"). Pairs
+                  with an OpenBaoAuthMethod of type=cert at the same path.
+                maxLength: 128
+                minLength: 1
+                pattern: ^[a-zA-Z0-9][a-zA-Z0-9_./-]*$
+                type: string
+              requiredExtensions:
+                description: |-
+                  RequiredExtensions narrows the cert by required X.509
+                  extension OIDs.
+                items:
+                  type: string
+                type: array
+              tokenBoundCidrs:
+                description: |-
+                  TokenBoundCIDRs restricts the source IPs of subsequent uses of
+                  the issued token.
+                items:
+                  type: string
+                type: array
+              tokenMaxTtl:
+                pattern: ^([0-9]+(ns|us|ms|s|m|h|d))+$
+                type: string
+              tokenPeriod:
+                pattern: ^([0-9]+(ns|us|ms|s|m|h|d))+$
+                type: string
+              tokenPolicies:
+                description: |-
+                  TokenPolicies is the list of bao policies granted on a
+                  successful login with this cert.
+                items:
+                  type: string
+                type: array
+              tokenTtl:
+                description: TokenTTL / TokenMaxTTL / TokenPeriod are bao duration
+                  strings.
+                pattern: ^([0-9]+(ns|us|ms|s|m|h|d))+$
+                type: string
+            required:
+            - certificateRef
+            - path
+            type: object
+          status:
+            description: OpenBaoCertAuthEngineRoleStatus defines the observed state.
+            properties:
+              baoWritten:
+                type: boolean
+              conditions:
+                items:
+                  description: Condition contains details for one aspect of the current
+                    state of this API Resource.
+                  properties:
+                    lastTransitionTime:
+                      description: |-
+                        lastTransitionTime is the last time the condition transitioned from one status to another.
+                        This should be when the underlying condition changed.  If that is not known, then using the time when the API field changed is acceptable.
+                      format: date-time
+                      type: string
+                    message:
+                      description: |-
+                        message is a human readable message indicating details about the transition.
+                        This may be an empty string.
+                      maxLength: 32768
+                      type: string
+                    observedGeneration:
+                      description: |-
+                        observedGeneration represents the .metadata.generation that the condition was set based upon.
+                        For instance, if .metadata.generation is currently 12, but the .status.conditions[x].observedGeneration is 9, the condition is out of date
+                        with respect to the current state of the instance.
+                      format: int64
+                      minimum: 0
+                      type: integer
+                    reason:
+                      description: |-
+                        reason contains a programmatic identifier indicating the reason for the condition's last transition.
+                        Producers of specific condition types may define expected values and meanings for this field,
+                        and whether the values are considered a guaranteed API.
+                        The value should be a CamelCase string.
+                        This field may not be empty.
+                      maxLength: 1024
+                      minLength: 1
+                      pattern: ^[A-Za-z]([A-Za-z0-9_,:]*[A-Za-z0-9_])?$
+                      type: string
+                    status:
+                      description: status of the condition, one of True, False, Unknown.
+                      enum:
+                      - "True"
+                      - "False"
+                      - Unknown
+                      type: string
+                    type:
+                      description: type of condition in CamelCase or in foo.example.com/CamelCase.
+                      maxLength: 316
+                      pattern: ^([a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*/)?(([A-Za-z0-9][-A-Za-z0-9_.]*)?[A-Za-z0-9])$
+                      type: string
+                  required:
+                  - lastTransitionTime
+                  - message
+                  - reason
+                  - status
+                  - type
+                  type: object
+                type: array
+                x-kubernetes-list-map-keys:
+                - type
+                x-kubernetes-list-type: map
+              lastWrittenBaoName:
+                type: string
+              lastWrittenOpenBaoNamespace:
+                type: string
+              lastWrittenPath:
+                type: string
+              resolvedCertificate:
+                description: |-
+                  ResolvedCertificate is the PEM bundle PrepareInternalValues
+                  pulled from spec.certificateRef. Surfaced for visibility +
+                  drift comparison; not user-settable directly.
+                type: string
+            type: object
+        type: object
+    served: true
+    storage: true
+    subresources:
+      status: {}
+---
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  annotations:
+    controller-gen.kubebuilder.io/version: v0.19.0
+  name: openbaogroupaliases.security.mto.stakater.com
+spec:
+  group: security.mto.stakater.com
+  names:
+    kind: OpenBaoGroupAlias
+    listKind: OpenBaoGroupAliasList
+    plural: openbaogroupaliases
+    shortNames:
+    - obga
+    singular: openbaogroupalias
+  scope: Namespaced
+  versions:
+  - name: v1alpha1
+    schema:
+      openAPIV3Schema:
+        description: OpenBaoGroupAlias is the Schema for the openbaogroupaliases API.
+        properties:
+          apiVersion:
+            description: |-
+              APIVersion defines the versioned schema of this representation of an object.
+              Servers should convert recognized schemas to the latest internal value, and
+              may reject unrecognized values.
+              More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources
+            type: string
+          kind:
+            description: |-
+              Kind is a string value representing the REST resource this object represents.
+              Servers may infer this from the endpoint the client submits requests to.
+              Cannot be updated.
+              In CamelCase.
+              More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds
+            type: string
+          metadata:
+            type: object
+          spec:
+            description: OpenBaoGroupAliasSpec defines the desired state.
+            properties:
+              canonicalGroupRef:
+                description: |-
+                  CanonicalGroupRef points at an OpenBaoGroup CR whose
+                  status.GroupID is the alias's parent. Mutually exclusive
+                  with spec.canonicalId. Use this form when both objects are
+                  managed by this operator — it is robust to bao group
+                  re-creation (the OpenBaoGroup re-stamps a new id; the alias
+                  picks it up on next reconcile).
+                properties:
+                  name:
+                    description: Name of the OpenBaoGroup CR to bind to.
+                    minLength: 1
+                    type: string
+                  namespace:
+                    description: |-
+                      Namespace of the OpenBaoGroup CR. Defaults to the alias CR's
+                      own namespace when empty.
+                    type: string
+                required:
+                - name
+                type: object
+              canonicalId:
+                description: |-
+                  CanonicalID is the literal bao group id this alias binds to.
+                  Mutually exclusive with spec.canonicalGroupRef. Use only when
+                  the parent group is managed out of band (e.g. created by an
+                  administrator with the bao CLI).
+                type: string
+              mountAccessor:
+                description: |-
+                  MountAccessor is the bao-side accessor of the auth mount this
+                  alias maps from. Look up with `bao auth list -format=json |
+                  jq -r '.["<mount>/"].accessor'`. Bao keys aliases by
+                  (name, mount_accessor); the same name on different mounts is
+                  a different alias.
+                minLength: 1
+                type: string
+              name:
+                description: |-
+                  Name is the alias name as it appears in the auth method
+                  (e.g. an OIDC subject claim, an LDAP CN, a JWT sub). Defaults
+                  to metadata.name. Aliases are not normalised — bao stores the
+                  value verbatim, so a CR claiming `Alice` must match the auth
+                  method's `Alice`, not `alice`.
+                maxLength: 512
+                type: string
+              openbaoNamespace:
+                description: OpenBaoNamespace targets a specific OpenBao namespace.
+                pattern: ^([a-z0-9]([-a-z0-9/]*[a-z0-9])?/?)?$
+                type: string
+            required:
+            - mountAccessor
+            type: object
+          status:
+            description: OpenBaoGroupAliasStatus defines the observed state.
+            properties:
+              aliasId:
+                description: |-
+                  AliasID is the bao-side alias id stamped on first create. Bao
+                  keys aliases by id; without this stamped on status, a subsequent
+                  reconcile that lost spec.canonicalId or saw a renamed parent
+                  would create a duplicate alias instead of updating the existing
+                  one. Recovered via FindIdentityGroupAlias on backfill.
+                type: string
+              baoWritten:
+                type: boolean
+              conditions:
+                items:
+                  description: Condition contains details for one aspect of the current
+                    state of this API Resource.
+                  properties:
+                    lastTransitionTime:
+                      description: |-
+                        lastTransitionTime is the last time the condition transitioned from one status to another.
+                        This should be when the underlying condition changed.  If that is not known, then using the time when the API field changed is acceptable.
+                      format: date-time
+                      type: string
+                    message:
+                      description: |-
+                        message is a human readable message indicating details about the transition.
+                        This may be an empty string.
+                      maxLength: 32768
+                      type: string
+                    observedGeneration:
+                      description: |-
+                        observedGeneration represents the .metadata.generation that the condition was set based upon.
+                        For instance, if .metadata.generation is currently 12, but the .status.conditions[x].observedGeneration is 9, the condition is out of date
+                        with respect to the current state of the instance.
+                      format: int64
+                      minimum: 0
+                      type: integer
+                    reason:
+                      description: |-
+                        reason contains a programmatic identifier indicating the reason for the condition's last transition.
+                        Producers of specific condition types may define expected values and meanings for this field,
+                        and whether the values are considered a guaranteed API.
+                        The value should be a CamelCase string.
+                        This field may not be empty.
+                      maxLength: 1024
+                      minLength: 1
+                      pattern: ^[A-Za-z]([A-Za-z0-9_,:]*[A-Za-z0-9_])?$
+                      type: string
+                    status:
+                      description: status of the condition, one of True, False, Unknown.
+                      enum:
+                      - "True"
+                      - "False"
+                      - Unknown
+                      type: string
+                    type:
+                      description: type of condition in CamelCase or in foo.example.com/CamelCase.
+                      maxLength: 316
+                      pattern: ^([a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*/)?(([A-Za-z0-9][-A-Za-z0-9_.]*)?[A-Za-z0-9])$
+                      type: string
+                  required:
+                  - lastTransitionTime
+                  - message
+                  - reason
+                  - status
+                  - type
+                  type: object
+                type: array
+                x-kubernetes-list-map-keys:
+                - type
+                x-kubernetes-list-type: map
+              lastWrittenBaoName:
+                type: string
+              lastWrittenMountAccessor:
+                description: |-
+                  LastWrittenMountAccessor captures the mount accessor the alias
+                  was last written under. mount_accessor is immutable on bao's
+                  side, so a spec edit that flips it has to delete the old
+                  alias before creating a new one. Stored on status so
+                  BaoDeleteIdentity can target the previous identity correctly.
+                type: string
+              lastWrittenOpenBaoNamespace:
+                type: string
+              resolvedCanonicalId:
+                description: |-
+                  ResolvedCanonicalID is the parent group id PrepareInternalValues
+                  computed (from spec.canonicalId or spec.canonicalGroupRef →
+                  OpenBaoGroup.status.groupId). Surfaced for visibility +
+                  drift comparison; not user-settable.
+                type: string
+            type: object
+        type: object
+    served: true
+    storage: true
+    subresources:
+      status: {}
+---
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  annotations:
+    controller-gen.kubebuilder.io/version: v0.19.0
+  name: openbaogroups.security.mto.stakater.com
+spec:
+  group: security.mto.stakater.com
+  names:
+    kind: OpenBaoGroup
+    listKind: OpenBaoGroupList
+    plural: openbaogroups
+    shortNames:
+    - obg
+    singular: openbaogroup
+  scope: Namespaced
+  versions:
+  - name: v1alpha1
+    schema:
+      openAPIV3Schema:
+        description: |-
+          OpenBaoGroup is the Schema for the openbaogroups API. Reconciles a CR
+          to a bao-side identity group.
+        properties:
+          apiVersion:
+            description: |-
+              APIVersion defines the versioned schema of this representation of an object.
+              Servers should convert recognized schemas to the latest internal value, and
+              may reject unrecognized values.
+              More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources
+            type: string
+          kind:
+            description: |-
+              Kind is a string value representing the REST resource this object represents.
+              Servers may infer this from the endpoint the client submits requests to.
+              Cannot be updated.
+              In CamelCase.
+              More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds
+            type: string
+          metadata:
+            type: object
+          spec:
+            description: OpenBaoGroupSpec defines the desired state of OpenBaoGroup.
+            properties:
+              memberEntityIds:
+                description: |-
+                  MemberEntityIds is the list of bao entity ids that belong to
+                  this group. Only meaningful for type=internal groups; external
+                  groups must leave this empty.
+                items:
+                  type: string
+                type: array
+              memberGroupIds:
+                description: |-
+                  MemberGroupIds is the list of bao group ids whose members
+                  inherit this group's policies. Only meaningful for
+                  type=internal groups; external groups must leave this empty.
+                items:
+                  type: string
+                type: array
+              metadata:
+                additionalProperties:
+                  type: string
+                description: |-
+                  Metadata is a free-form key/value map persisted on the bao
+                  group. Useful for cross-system correlation. Keys and values
+                  must be ASCII strings.
+                type: object
+              name:
+                description: Name is the bao-side group name. Defaults to metadata.name.
+                maxLength: 128
+                pattern: ^[a-z0-9]([-a-z0-9]*[a-z0-9])?$
+                type: string
+              openbaoNamespace:
+                description: OpenBaoNamespace targets a specific OpenBao namespace.
+                pattern: ^([a-z0-9]([-a-z0-9/]*[a-z0-9])?/?)?$
+                type: string
+              policies:
+                description: |-
+                  Policies is the list of bao policy names attached to the
+                  group. Every member of the group inherits these policies.
+                items:
+                  type: string
+                type: array
+              type:
+                description: |-
+                  Type selects the bao group kind: "internal" (default) or
+                  "external". Internal groups hold member entities and member
+                  groups directly. External groups receive members through
+                  OpenBaoGroupAlias entries that map auth-method aliases into
+                  the group. Type is immutable on bao's side — changing it on
+                  an existing group surfaces as Ready=False with reason=BaoError;
+                  delete and recreate the CR to switch.
+                enum:
+                - internal
+                - external
+                type: string
+            type: object
+          status:
+            description: OpenBaoGroupStatus defines the observed state of OpenBaoGroup.
+            properties:
+              baoWritten:
+                type: boolean
+              conditions:
+                items:
+                  description: Condition contains details for one aspect of the current
+                    state of this API Resource.
+                  properties:
+                    lastTransitionTime:
+                      description: |-
+                        lastTransitionTime is the last time the condition transitioned from one status to another.
+                        This should be when the underlying condition changed.  If that is not known, then using the time when the API field changed is acceptable.
+                      format: date-time
+                      type: string
+                    message:
+                      description: |-
+                        message is a human readable message indicating details about the transition.
+                        This may be an empty string.
+                      maxLength: 32768
+                      type: string
+                    observedGeneration:
+                      description: |-
+                        observedGeneration represents the .metadata.generation that the condition was set based upon.
+                        For instance, if .metadata.generation is currently 12, but the .status.conditions[x].observedGeneration is 9, the condition is out of date
+                        with respect to the current state of the instance.
+                      format: int64
+                      minimum: 0
+                      type: integer
+                    reason:
+                      description: |-
+                        reason contains a programmatic identifier indicating the reason for the condition's last transition.
+                        Producers of specific condition types may define expected values and meanings for this field,
+                        and whether the values are considered a guaranteed API.
+                        The value should be a CamelCase string.
+                        This field may not be empty.
+                      maxLength: 1024
+                      minLength: 1
+                      pattern: ^[A-Za-z]([A-Za-z0-9_,:]*[A-Za-z0-9_])?$
+                      type: string
+                    status:
+                      description: status of the condition, one of True, False, Unknown.
+                      enum:
+                      - "True"
+                      - "False"
+                      - Unknown
+                      type: string
+                    type:
+                      description: type of condition in CamelCase or in foo.example.com/CamelCase.
+                      maxLength: 316
+                      pattern: ^([a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*/)?(([A-Za-z0-9][-A-Za-z0-9_.]*)?[A-Za-z0-9])$
+                      type: string
+                  required:
+                  - lastTransitionTime
+                  - message
+                  - reason
+                  - status
+                  - type
+                  type: object
+                type: array
+                x-kubernetes-list-map-keys:
+                - type
+                x-kubernetes-list-type: map
+              groupId:
+                description: |-
+                  GroupID is the bao-side group id stamped on first create. Other
+                  CRs (notably OpenBaoGroupAlias) reference it as canonicalId
+                  when binding to this group.
+                type: string
+              lastWrittenBaoName:
+                type: string
+              lastWrittenOpenBaoNamespace:
+                type: string
+            type: object
+        type: object
+    served: true
+    storage: true
+    subresources:
+      status: {}
+---
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  annotations:
+    controller-gen.kubebuilder.io/version: v0.19.0
+  name: openbaoidentitytokenroles.security.mto.stakater.com
+spec:
+  group: security.mto.stakater.com
+  names:
+    kind: OpenBaoIdentityTokenRole
+    listKind: OpenBaoIdentityTokenRoleList
+    plural: openbaoidentitytokenroles
+    shortNames:
+    - obitr
+    singular: openbaoidentitytokenrole
+  scope: Namespaced
+  versions:
+  - name: v1alpha1
+    schema:
+      openAPIV3Schema:
+        description: |-
+          OpenBaoIdentityTokenRole is the Schema for the
+          openbaoidentitytokenroles API.
+        properties:
+          apiVersion:
+            description: |-
+              APIVersion defines the versioned schema of this representation of an object.
+              Servers should convert recognized schemas to the latest internal value, and
+              may reject unrecognized values.
+              More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources
+            type: string
+          kind:
+            description: |-
+              Kind is a string value representing the REST resource this object represents.
+              Servers may infer this from the endpoint the client submits requests to.
+              Cannot be updated.
+              In CamelCase.
+              More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds
+            type: string
+          metadata:
+            type: object
+          spec:
+            description: OpenBaoIdentityTokenRoleSpec defines the desired state.
+            properties:
+              clientId:
+                description: |-
+                  ClientID is the audience claim ("aud") of issued tokens. Set
+                  to the IAM role / GCP service account / external relier that
+                  will validate the tokens.
+                type: string
+              key:
+                description: |-
+                  Key names a pre-existing OIDC key at identity/oidc/key/<key>
+                  that signs the issued tokens. The key must already exist —
+                  the controller does not create OIDC keys today.
+                minLength: 1
+                type: string
+              name:
+                description: Name is the bao-side role name. Defaults to metadata.name.
+                maxLength: 128
+                pattern: ^[a-z0-9]([-a-z0-9]*[a-z0-9])?$
+                type: string
+              openbaoNamespace:
+                description: OpenBaoNamespace targets a specific OpenBao namespace.
+                pattern: ^([a-z0-9]([-a-z0-9/]*[a-z0-9])?/?)?$
+                type: string
+              template:
+                description: |-
+                  Template is the JWT claims template applied to issued tokens.
+                  Bao accepts plain JSON or base64-wrapped JSON; the value is
+                  passed through verbatim. Templating tokens are documented at
+                  https://openbao.org/docs/secrets/identity/identity-token/.
+                type: string
+              ttl:
+                description: |-
+                  TTL is a bao duration string ("1h", "3600s", "30m"). When
+                  empty bao uses the key's default TTL.
+                pattern: ^([0-9]+(ns|us|ms|s|m|h|d))+$
+                type: string
+            required:
+            - key
+            type: object
+          status:
+            description: OpenBaoIdentityTokenRoleStatus defines the observed state.
+            properties:
+              baoWritten:
+                type: boolean
+              conditions:
+                items:
+                  description: Condition contains details for one aspect of the current
+                    state of this API Resource.
+                  properties:
+                    lastTransitionTime:
+                      description: |-
+                        lastTransitionTime is the last time the condition transitioned from one status to another.
+                        This should be when the underlying condition changed.  If that is not known, then using the time when the API field changed is acceptable.
+                      format: date-time
+                      type: string
+                    message:
+                      description: |-
+                        message is a human readable message indicating details about the transition.
+                        This may be an empty string.
+                      maxLength: 32768
+                      type: string
+                    observedGeneration:
+                      description: |-
+                        observedGeneration represents the .metadata.generation that the condition was set based upon.
+                        For instance, if .metadata.generation is currently 12, but the .status.conditions[x].observedGeneration is 9, the condition is out of date
+                        with respect to the current state of the instance.
+                      format: int64
+                      minimum: 0
+                      type: integer
+                    reason:
+                      description: |-
+                        reason contains a programmatic identifier indicating the reason for the condition's last transition.
+                        Producers of specific condition types may define expected values and meanings for this field,
+                        and whether the values are considered a guaranteed API.
+                        The value should be a CamelCase string.
+                        This field may not be empty.
+                      maxLength: 1024
+                      minLength: 1
+                      pattern: ^[A-Za-z]([A-Za-z0-9_,:]*[A-Za-z0-9_])?$
+                      type: string
+                    status:
+                      description: status of the condition, one of True, False, Unknown.
+                      enum:
+                      - "True"
+                      - "False"
+                      - Unknown
+                      type: string
+                    type:
+                      description: type of condition in CamelCase or in foo.example.com/CamelCase.
+                      maxLength: 316
+                      pattern: ^([a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*/)?(([A-Za-z0-9][-A-Za-z0-9_.]*)?[A-Za-z0-9])$
+                      type: string
+                  required:
+                  - lastTransitionTime
+                  - message
+                  - reason
+                  - status
+                  - type
+                  type: object
+                type: array
+                x-kubernetes-list-map-keys:
+                - type
+                x-kubernetes-list-type: map
+              lastWrittenBaoName:
+                type: string
+              lastWrittenOpenBaoNamespace:
+                type: string
+            type: object
+        type: object
+    served: true
+    storage: true
+    subresources:
+      status: {}
+---
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  annotations:
+    controller-gen.kubebuilder.io/version: v0.19.0
+  name: openbaojwtoidcauthengineconfigs.security.mto.stakater.com
+spec:
+  group: security.mto.stakater.com
+  names:
+    kind: OpenBaoJWTOIDCAuthEngineConfig
+    listKind: OpenBaoJWTOIDCAuthEngineConfigList
+    plural: openbaojwtoidcauthengineconfigs
+    shortNames:
+    - objwtcfg
+    singular: openbaojwtoidcauthengineconfig
+  scope: Namespaced
+  versions:
+  - name: v1alpha1
+    schema:
+      openAPIV3Schema:
+        description: |-
+          OpenBaoJWTOIDCAuthEngineConfig is the Schema for the
+          openbaojwtoidcauthengineconfigs API.
+        properties:
+          apiVersion:
+            description: |-
+              APIVersion defines the versioned schema of this representation of an object.
+              Servers should convert recognized schemas to the latest internal value, and
+              may reject unrecognized values.
+              More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources
+            type: string
+          kind:
+            description: |-
+              Kind is a string value representing the REST resource this object represents.
+              Servers may infer this from the endpoint the client submits requests to.
+              Cannot be updated.
+              In CamelCase.
+              More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds
+            type: string
+          metadata:
+            type: object
+          spec:
+            description: OpenBaoJWTOIDCAuthEngineConfigSpec defines the desired state.
+            properties:
+              boundIssuer:
+                description: |-
+                  BoundIssuer narrows accepted tokens to those whose "iss" claim
+                  matches.
+                type: string
+              defaultRole:
+                description: |-
+                  DefaultRole names the role bao falls back to when the inbound
+                  login does not pick one. Must reference an
+                  OpenBaoJWTOIDCAuthEngineRole at the same mount.
+                type: string
+              jwksCaPem:
+                description: |-
+                  JWKsCAPEM is the optional PEM-encoded CA bundle used to verify
+                  the JWKS URL's TLS cert.
+                type: string
+              jwksUrl:
+                description: |-
+                  JWKsURL is a static JWKS endpoint bao polls for token-signing
+                  keys. Mutually exclusive with oidcDiscoveryUrl in the typical
+                  OIDC case; for plain JWT auth, JWKsURL is the primary key
+                  source.
+                type: string
+              jwtSupportedAlgs:
+                description: |-
+                  JWTSupportedAlgs restricts which JWT signing algorithms bao
+                  will accept (e.g. RS256, ES256).
+                items:
+                  type: string
+                type: array
+              jwtValidationPubkeys:
+                description: |-
+                  JWTValidationPubkeys is the list of static PEM-encoded public
+                  keys bao validates inbound tokens against. Mutually exclusive
+                  with oidcDiscoveryUrl + jwksUrl.
+                items:
+                  type: string
+                type: array
+              oidcClientId:
+                description: |-
+                  OIDCClientID is the OAuth2 client id bao presents to the
+                  provider.
+                type: string
+              oidcClientSecretRef:
+                description: |-
+                  OIDCClientSecretRef points at a Kubernetes Secret holding the
+                  OAuth2 client_secret. The cleartext value never lands in the
+                  CR spec.
+                properties:
+                  key:
+                    type: string
+                  name:
+                    minLength: 1
+                    type: string
+                  namespace:
+                    type: string
+                required:
+                - name
+                type: object
+              oidcDiscoveryCaPem:
+                description: |-
+                  OIDCDiscoveryCAPEM is the optional PEM-encoded CA bundle used
+                  to verify the discovery URL's TLS cert.
+                type: string
+              oidcDiscoveryUrl:
+                description: |-
+                  OIDCDiscoveryURL is the OIDC provider's well-known discovery
+                  endpoint. Mutually exclusive with jwksUrl /
+                  jwtValidationPubkeys; bao validates inbound tokens against
+                  the keys this URL advertises.
+                type: string
+              oidcResponseMode:
+                description: |-
+                  OIDCResponseMode is bao's "response_mode" param to the OIDC
+                  provider on login.
+                enum:
+                - query
+                - form_post
+                type: string
+              oidcResponseTypes:
+                description: |-
+                  OIDCResponseTypes is bao's "response_type" list. Typical
+                  values are "code" or "id_token".
+                items:
+                  type: string
+                type: array
+              openbaoNamespace:
+                description: OpenBaoNamespace targets a specific OpenBao namespace.
+                pattern: ^([a-z0-9]([-a-z0-9/]*[a-z0-9])?/?)?$
+                type: string
+              path:
+                description: |-
+                  Path is the bao-side jwt or oidc auth mount path. Pairs with an
+                  OpenBaoAuthMethod of type=jwt or type=oidc at the same path.
+                maxLength: 128
+                minLength: 1
+                pattern: ^[a-zA-Z0-9][a-zA-Z0-9_./-]*$
+                type: string
+            required:
+            - path
+            type: object
+          status:
+            description: OpenBaoJWTOIDCAuthEngineConfigStatus defines the observed
+              state.
+            properties:
+              baoWritten:
+                type: boolean
+              conditions:
+                items:
+                  description: Condition contains details for one aspect of the current
+                    state of this API Resource.
+                  properties:
+                    lastTransitionTime:
+                      description: |-
+                        lastTransitionTime is the last time the condition transitioned from one status to another.
+                        This should be when the underlying condition changed.  If that is not known, then using the time when the API field changed is acceptable.
+                      format: date-time
+                      type: string
+                    message:
+                      description: |-
+                        message is a human readable message indicating details about the transition.
+                        This may be an empty string.
+                      maxLength: 32768
+                      type: string
+                    observedGeneration:
+                      description: |-
+                        observedGeneration represents the .metadata.generation that the condition was set based upon.
+                        For instance, if .metadata.generation is currently 12, but the .status.conditions[x].observedGeneration is 9, the condition is out of date
+                        with respect to the current state of the instance.
+                      format: int64
+                      minimum: 0
+                      type: integer
+                    reason:
+                      description: |-
+                        reason contains a programmatic identifier indicating the reason for the condition's last transition.
+                        Producers of specific condition types may define expected values and meanings for this field,
+                        and whether the values are considered a guaranteed API.
+                        The value should be a CamelCase string.
+                        This field may not be empty.
+                      maxLength: 1024
+                      minLength: 1
+                      pattern: ^[A-Za-z]([A-Za-z0-9_,:]*[A-Za-z0-9_])?$
+                      type: string
+                    status:
+                      description: status of the condition, one of True, False, Unknown.
+                      enum:
+                      - "True"
+                      - "False"
+                      - Unknown
+                      type: string
+                    type:
+                      description: type of condition in CamelCase or in foo.example.com/CamelCase.
+                      maxLength: 316
+                      pattern: ^([a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*/)?(([A-Za-z0-9][-A-Za-z0-9_.]*)?[A-Za-z0-9])$
+                      type: string
+                  required:
+                  - lastTransitionTime
+                  - message
+                  - reason
+                  - status
+                  - type
+                  type: object
+                type: array
+                x-kubernetes-list-map-keys:
+                - type
+                x-kubernetes-list-type: map
+              lastWrittenBaoName:
+                type: string
+              lastWrittenOpenBaoNamespace:
+                type: string
+              lastWrittenSecretMac:
+                description: |-
+                  LastWrittenSecretMAC is the HMAC-SHA256 (base64) of the
+                  Secret-sourced field values the operator last successfully wrote
+                  to bao. The drift comparator compares the freshly-recomputed MAC
+                  against this on each reconcile; a mismatch signals that the
+                  underlying Secret rotated and the operator must re-write.
+                  Empty until the first successful write. See [hmacstore](../../internal/hmacstore).
+                type: string
+              resolvedClientSecret:
+                description: |-
+                  ResolvedClientSecret holds the cleartext value
+                  PrepareInternalValues pulled from spec.oidcClientSecretRef.
+                  Surfaced for drift comparison only — the operator's status
+                  store is the same etcd that would otherwise hold the inline
+                  cleartext, so this is no worse than inlining; the Secret-ref
+                  pattern is about not putting it in the CR YAML manifest.
+                type: string
+            type: object
+        type: object
+    served: true
+    storage: true
+    subresources:
+      status: {}
+---
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  annotations:
+    controller-gen.kubebuilder.io/version: v0.19.0
+  name: openbaojwtoidcauthengineroles.security.mto.stakater.com
+spec:
+  group: security.mto.stakater.com
+  names:
+    kind: OpenBaoJWTOIDCAuthEngineRole
+    listKind: OpenBaoJWTOIDCAuthEngineRoleList
+    plural: openbaojwtoidcauthengineroles
+    shortNames:
+    - objwtrole
+    singular: openbaojwtoidcauthenginerole
+  scope: Namespaced
+  versions:
+  - name: v1alpha1
+    schema:
+      openAPIV3Schema:
+        description: |-
+          OpenBaoJWTOIDCAuthEngineRole is the Schema for the
+          openbaojwtoidcauthengineroles API.
+        properties:
+          apiVersion:
+            description: |-
+              APIVersion defines the versioned schema of this representation of an object.
+              Servers should convert recognized schemas to the latest internal value, and
+              may reject unrecognized values.
+              More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources
+            type: string
+          kind:
+            description: |-
+              Kind is a string value representing the REST resource this object represents.
+              Servers may infer this from the endpoint the client submits requests to.
+              Cannot be updated.
+              In CamelCase.
+              More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds
+            type: string
+          metadata:
+            type: object
+          spec:
+            description: OpenBaoJWTOIDCAuthEngineRoleSpec defines the desired state.
+            properties:
+              allowedRedirectUris:
+                description: |-
+                  AllowedRedirectURIs is required for type=oidc roles. Bao
+                  includes these in the authorization request's redirect_uri
+                  list.
+                items:
+                  type: string
+                type: array
+              boundAudiences:
+                description: |-
+                  BoundAudiences narrows accepted tokens to those whose "aud"
+                  claim contains one of these values. Required for JWT roles
+                  when no boundIssuer is set; OIDC roles use the client_id by
+                  default.
+                items:
+                  type: string
+                type: array
+              boundClaims:
+                additionalProperties:
+                  items:
+                    type: string
+                  type: array
+                description: |-
+                  BoundClaims gates login on JWT claim values. Each key is a
+                  claim name (e.g. "groups", "email"); the value is the list of
+                  accepted strings. A login token must carry every listed claim
+                  with a value matching one of the entries (interpretation
+                  controlled by BoundClaimsType). Empty disables the filter —
+                  any token passing BoundAudiences / BoundSubject is accepted.
+                type: object
+              boundClaimsType:
+                description: |-
+                  BoundClaimsType controls how BoundClaims values are matched
+                  against inbound JWT claim values: "string" (default) for
+                  exact-match, "glob" for shell-style wildcards.
+                enum:
+                - string
+                - glob
+                type: string
+              boundSubject:
+                description: BoundSubject narrows by "sub" claim.
+                type: string
+              claimMappings:
+                additionalProperties:
+                  type: string
+                description: |-
+                  ClaimMappings maps inbound JWT claim names to bao identity
+                  metadata keys.
+                type: object
+              groupsClaim:
+                description: |-
+                  GroupsClaim is the JWT claim bao uses to populate the
+                  identity's groups (mapped to bao identity groups via aliases).
+                type: string
+              name:
+                description: Name is the bao-side role name. Defaults to metadata.name.
+                pattern: ^[a-z0-9]([-a-z0-9]*[a-z0-9])?$
+                type: string
+              oidcScopes:
+                description: OIDCScopes is the list of OIDC scopes bao requests on
+                  login.
+                items:
+                  type: string
+                type: array
+              openbaoNamespace:
+                description: OpenBaoNamespace targets a specific OpenBao namespace.
+                pattern: ^([a-z0-9]([-a-z0-9/]*[a-z0-9])?/?)?$
+                type: string
+              path:
+                description: Path is the bao-side jwt or oidc auth mount.
+                maxLength: 128
+                minLength: 1
+                pattern: ^[a-zA-Z0-9][a-zA-Z0-9_./-]*$
+                type: string
+              roleType:
+                description: |-
+                  RoleType is "jwt" or "oidc". OIDC roles additionally require
+                  allowedRedirectUris.
+                enum:
+                - jwt
+                - oidc
+                type: string
+              tokenBoundCidrs:
+                description: TokenBoundCIDRs restricts source IPs of subsequent token
+                  uses.
+                items:
+                  type: string
+                type: array
+              tokenMaxTtl:
+                pattern: ^([0-9]+(ns|us|ms|s|m|h|d))+$
+                type: string
+              tokenPolicies:
+                description: |-
+                  TokenPolicies is the list of bao policies granted on a
+                  successful login.
+                items:
+                  type: string
+                type: array
+              tokenTtl:
+                description: TokenTTL / TokenMaxTTL are bao duration strings.
+                pattern: ^([0-9]+(ns|us|ms|s|m|h|d))+$
+                type: string
+              userClaim:
+                description: |-
+                  UserClaim is the JWT claim bao uses as the identity entity
+                  name (e.g. "sub", "email", "preferred_username").
+                minLength: 1
+                type: string
+            required:
+            - path
+            - roleType
+            - userClaim
+            type: object
+          status:
+            description: OpenBaoJWTOIDCAuthEngineRoleStatus defines the observed state.
+            properties:
+              baoWritten:
+                type: boolean
+              conditions:
+                items:
+                  description: Condition contains details for one aspect of the current
+                    state of this API Resource.
+                  properties:
+                    lastTransitionTime:
+                      description: |-
+                        lastTransitionTime is the last time the condition transitioned from one status to another.
+                        This should be when the underlying condition changed.  If that is not known, then using the time when the API field changed is acceptable.
+                      format: date-time
+                      type: string
+                    message:
+                      description: |-
+                        message is a human readable message indicating details about the transition.
+                        This may be an empty string.
+                      maxLength: 32768
+                      type: string
+                    observedGeneration:
+                      description: |-
+                        observedGeneration represents the .metadata.generation that the condition was set based upon.
+                        For instance, if .metadata.generation is currently 12, but the .status.conditions[x].observedGeneration is 9, the condition is out of date
+                        with respect to the current state of the instance.
+                      format: int64
+                      minimum: 0
+                      type: integer
+                    reason:
+                      description: |-
+                        reason contains a programmatic identifier indicating the reason for the condition's last transition.
+                        Producers of specific condition types may define expected values and meanings for this field,
+                        and whether the values are considered a guaranteed API.
+                        The value should be a CamelCase string.
+                        This field may not be empty.
+                      maxLength: 1024
+                      minLength: 1
+                      pattern: ^[A-Za-z]([A-Za-z0-9_,:]*[A-Za-z0-9_])?$
+                      type: string
+                    status:
+                      description: status of the condition, one of True, False, Unknown.
+                      enum:
+                      - "True"
+                      - "False"
+                      - Unknown
+                      type: string
+                    type:
+                      description: type of condition in CamelCase or in foo.example.com/CamelCase.
+                      maxLength: 316
+                      pattern: ^([a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*/)?(([A-Za-z0-9][-A-Za-z0-9_.]*)?[A-Za-z0-9])$
+                      type: string
+                  required:
+                  - lastTransitionTime
+                  - message
+                  - reason
+                  - status
+                  - type
+                  type: object
+                type: array
+                x-kubernetes-list-map-keys:
+                - type
+                x-kubernetes-list-type: map
+              lastWrittenBaoName:
+                type: string
+              lastWrittenOpenBaoNamespace:
+                type: string
+              lastWrittenPath:
+                type: string
+            type: object
+        type: object
+    served: true
+    storage: true
+    subresources:
+      status: {}
+---
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  annotations:
+    controller-gen.kubebuilder.io/version: v0.19.0
+  name: openbaokubernetesauthengineconfigs.security.mto.stakater.com
+spec:
+  group: security.mto.stakater.com
+  names:
+    kind: OpenBaoKubernetesAuthEngineConfig
+    listKind: OpenBaoKubernetesAuthEngineConfigList
+    plural: openbaokubernetesauthengineconfigs
+    shortNames:
+    - obkac
+    singular: openbaokubernetesauthengineconfig
+  scope: Namespaced
+  versions:
+  - name: v1alpha1
+    schema:
+      openAPIV3Schema:
+        description: |-
+          OpenBaoKubernetesAuthEngineConfig is the Schema for the
+          openbaokubernetesauthengineconfigs API.
+        properties:
+          apiVersion:
+            description: |-
+              APIVersion defines the versioned schema of this representation of an object.
+              Servers should convert recognized schemas to the latest internal value, and
+              may reject unrecognized values.
+              More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources
+            type: string
+          kind:
+            description: |-
+              Kind is a string value representing the REST resource this object represents.
+              Servers may infer this from the endpoint the client submits requests to.
+              Cannot be updated.
+              In CamelCase.
+              More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds
+            type: string
+          metadata:
+            type: object
+          spec:
+            description: OpenBaoKubernetesAuthEngineConfigSpec defines the desired
+              state.
+            properties:
+              disableIssValidation:
+                description: |-
+                  DisableISSValidation skips JWT iss-claim validation. Set true
+                  when the cluster issues SA tokens with an iss bao does not
+                  trust (common with kind / minikube). Defaults to bao's setting
+                  (typically false).
+                type: boolean
+              disableLocalCaJwt:
+                description: |-
+                  DisableLocalCAJWT disables defaulting to the local CA cert and
+                  service-account JWT when bao runs inside a Kubernetes pod.
+                type: boolean
+              issuer:
+                description: |-
+                  Issuer narrows accepted tokens to those whose "iss" claim
+                  matches. Defaults to bao's "kubernetes/serviceaccount" when
+                  unset.
+                type: string
+              kubernetesCaCertRef:
+                description: |-
+                  KubernetesCaCertRef points at a Secret holding the PEM-encoded
+                  CA bundle that verifies the apiserver's TLS cert. Optional —
+                  bao falls back to the system trust store if unset.
+                properties:
+                  key:
+                    description: Key inside the Secret. Defaults to "ca.crt".
+                    type: string
+                  name:
+                    minLength: 1
+                    type: string
+                  namespace:
+                    type: string
+                required:
+                - name
+                type: object
+              kubernetesHost:
+                description: |-
+                  KubernetesHost is the apiserver URL bao calls TokenReview
+                  against on inbound login. Required.
+                minLength: 1
+                type: string
+              openbaoNamespace:
+                description: OpenBaoNamespace targets a specific OpenBao namespace.
+                pattern: ^([a-z0-9]([-a-z0-9/]*[a-z0-9])?/?)?$
+                type: string
+              path:
+                description: |-
+                  Path is the bao-side kubernetes auth mount path (e.g.
+                  "kubernetes"). Pairs with an OpenBaoAuthMethod of
+                  type=kubernetes at the same path.
+                maxLength: 128
+                minLength: 1
+                pattern: ^[a-zA-Z0-9][a-zA-Z0-9_./-]*$
+                type: string
+              pemKeys:
+                description: |-
+                  PEMKeys is a list of PEM-encoded public keys bao verifies SA
+                  JWT signatures against locally. Mutually-exclusive in practice
+                  with the TokenReview flow; almost always empty.
+                items:
+                  type: string
+                type: array
+              tokenReviewerJwtRef:
+                description: |-
+                  TokenReviewerJwtRef points at a Secret holding the SA JWT bao
+                  presents to the apiserver when calling TokenReview. Optional —
+                  when unset, bao falls back to using the inbound login JWT
+                  itself for the TokenReview call (works only on clusters that
+                  allow self-review). Required for non-root mounts in practice.
+                properties:
+                  key:
+                    description: |-
+                      Key inside the Secret. Defaults to "token" (matches the
+                      service-account-token Secret type's key).
+                    type: string
+                  name:
+                    minLength: 1
+                    type: string
+                  namespace:
+                    type: string
+                required:
+                - name
+                type: object
+              useAnnotationsAsAliasMetadata:
+                description: |-
+                  UseAnnotationsAsAliasMetadata copies SA annotations prefixed
+                  with vault.hashicorp.com/alias-metadata- onto the bao identity
+                  alias.
+                type: boolean
+            required:
+            - kubernetesHost
+            - path
+            type: object
+          status:
+            description: OpenBaoKubernetesAuthEngineConfigStatus defines the observed
+              state.
+            properties:
+              baoWritten:
+                type: boolean
+              conditions:
+                items:
+                  description: Condition contains details for one aspect of the current
+                    state of this API Resource.
+                  properties:
+                    lastTransitionTime:
+                      description: |-
+                        lastTransitionTime is the last time the condition transitioned from one status to another.
+                        This should be when the underlying condition changed.  If that is not known, then using the time when the API field changed is acceptable.
+                      format: date-time
+                      type: string
+                    message:
+                      description: |-
+                        message is a human readable message indicating details about the transition.
+                        This may be an empty string.
+                      maxLength: 32768
+                      type: string
+                    observedGeneration:
+                      description: |-
+                        observedGeneration represents the .metadata.generation that the condition was set based upon.
+                        For instance, if .metadata.generation is currently 12, but the .status.conditions[x].observedGeneration is 9, the condition is out of date
+                        with respect to the current state of the instance.
+                      format: int64
+                      minimum: 0
+                      type: integer
+                    reason:
+                      description: |-
+                        reason contains a programmatic identifier indicating the reason for the condition's last transition.
+                        Producers of specific condition types may define expected values and meanings for this field,
+                        and whether the values are considered a guaranteed API.
+                        The value should be a CamelCase string.
+                        This field may not be empty.
+                      maxLength: 1024
+                      minLength: 1
+                      pattern: ^[A-Za-z]([A-Za-z0-9_,:]*[A-Za-z0-9_])?$
+                      type: string
+                    status:
+                      description: status of the condition, one of True, False, Unknown.
+                      enum:
+                      - "True"
+                      - "False"
+                      - Unknown
+                      type: string
+                    type:
+                      description: type of condition in CamelCase or in foo.example.com/CamelCase.
+                      maxLength: 316
+                      pattern: ^([a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*/)?(([A-Za-z0-9][-A-Za-z0-9_.]*)?[A-Za-z0-9])$
+                      type: string
+                  required:
+                  - lastTransitionTime
+                  - message
+                  - reason
+                  - status
+                  - type
+                  type: object
+                type: array
+                x-kubernetes-list-map-keys:
+                - type
+                x-kubernetes-list-type: map
+              lastWrittenBaoName:
+                type: string
+              lastWrittenOpenBaoNamespace:
+                type: string
+              lastWrittenSecretMac:
+                description: |-
+                  LastWrittenSecretMAC is the HMAC-SHA256 (base64) of the
+                  Secret-sourced field values the operator last successfully wrote
+                  to bao. The drift comparator compares the freshly-recomputed MAC
+                  against this on each reconcile; a mismatch signals that the
+                  underlying Secret rotated and the operator must re-write.
+                  Empty until the first successful write. See [hmacstore](../../internal/hmacstore).
+                type: string
+              resolvedKubernetesCaCert:
+                description: |-
+                  ResolvedKubernetesCACert holds the PEM CA bundle resolved from
+                  spec.kubernetesCaCertRef.
+                type: string
+              resolvedTokenReviewerJwt:
+                description: |-
+                  ResolvedTokenReviewerJWT holds the cleartext value
+                  PrepareInternalValues pulled from spec.tokenReviewerJwtRef.
+                  Surfaced for drift comparison only — same etcd-storage
+                  trade-off as JWT/OIDC config's ResolvedClientSecret.
+                type: string
+            type: object
+        type: object
+    served: true
+    storage: true
+    subresources:
+      status: {}
+---
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  annotations:
+    controller-gen.kubebuilder.io/version: v0.19.0
+  name: openbaokubernetesauthroles.security.mto.stakater.com
+spec:
+  group: security.mto.stakater.com
+  names:
+    kind: OpenBaoKubernetesAuthRole
+    listKind: OpenBaoKubernetesAuthRoleList
+    plural: openbaokubernetesauthroles
+    shortNames:
+    - obkar
+    singular: openbaokubernetesauthrole
+  scope: Namespaced
+  versions:
+  - name: v1alpha1
+    schema:
+      openAPIV3Schema:
+        description: |-
+          OpenBaoKubernetesAuthRole is the Schema for the openbaokubernetesauthroles
+          API. Reconciled against OpenBao auth/<path>/role/<name>.
+        properties:
+          apiVersion:
+            description: |-
+              APIVersion defines the versioned schema of this representation of an object.
+              Servers should convert recognized schemas to the latest internal value, and
+              may reject unrecognized values.
+              More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources
+            type: string
+          kind:
+            description: |-
+              Kind is a string value representing the REST resource this object represents.
+              Servers may infer this from the endpoint the client submits requests to.
+              Cannot be updated.
+              In CamelCase.
+              More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds
+            type: string
+          metadata:
+            type: object
+          spec:
+            description: |-
+              OpenBaoKubernetesAuthRoleSpec defines the desired state of
+              OpenBaoKubernetesAuthRole.
+            properties:
+              aliasNameSource:
+                default: serviceaccount_uid
+                description: |-
+                  AliasNameSource controls how identity aliases are generated.
+                  serviceaccount_uid is the safer choice (UIDs are unique and
+                  non-reusable); serviceaccount_name lets you pre-create alias
+                  records but conflates SA recreations with the same name.
+                enum:
+                - serviceaccount_uid
+                - serviceaccount_name
+                type: string
+              audience:
+                description: |-
+                  Audience is the JWT audience claim bao verifies on login.
+                  Optional; bao defaults to no audience check when unset.
+                type: string
+              name:
+                description: |-
+                  Name overrides metadata.name when written to bao. Pattern is
+                  anchored — OpenAPI v3's `pattern` keyword does substring match
+                  by default, so an unanchored regex would accept "Bad_Name1"
+                  because the substring "a" matches. MaxLength matches DNS-1123
+                  (the conservative ceiling for k8s-style names).
+                maxLength: 253
+                pattern: ^[a-z0-9]([-a-z0-9]*[a-z0-9])?$
+                type: string
+              openbaoNamespace:
+                description: |-
+                  OpenBaoNamespace targets a specific OpenBao namespace for this
+                  role's API calls (sets the X-Vault-Namespace header). Empty (the
+                  default) means the root namespace and matches pre-namespace-support
+                  behaviour. Nested namespaces are allowed via slash-separated
+                  segments (e.g. "acme/sub"); a trailing slash is accepted but not
+                  required (bao accepts both forms).
+                pattern: ^([a-z0-9]([-a-z0-9/]*[a-z0-9])?/?)?$
+                type: string
+              path:
+                description: |-
+                  Path is the auth mount under which the role is created. The bao
+                  path is auth/<path>/role/<name>. Plain string (not VCO's Path)
+                  because we don't need the legacy regex VCO carries.
+
+                  The Pattern accepts nested mount paths (e.g. dev/k8s, k8s/cluster-a)
+                  since bao supports them, but rejects whitespace, control chars,
+                  and shell metacharacters at admission instead of letting them
+                  surface as a bao 400 mid-reconcile. MaxLength=128 is well above
+                  any realistic mount path while still bounding the request URL.
+                maxLength: 128
+                minLength: 1
+                pattern: ^[a-zA-Z0-9][a-zA-Z0-9_./-]*$
+                type: string
+              policies:
+                description: Policies is the list of bao policy names this role binds.
+                items:
+                  type: string
+                minItems: 1
+                type: array
+                x-kubernetes-list-type: set
+              targetNamespaces:
+                description: |-
+                  TargetNamespaces selects the set of Kubernetes namespaces whose
+                  service accounts bind to this role.
+                properties:
+                  targetNamespaceSelector:
+                    description: |-
+                      TargetNamespaceSelector matches namespaces by label. Re-resolved
+                      on every reconcile and on every namespace label change (the
+                      controller's Watches(&corev1.Namespace{}) fans out via mapFn).
+                    properties:
+                      matchExpressions:
+                        description: matchExpressions is a list of label selector
+                          requirements. The requirements are ANDed.
+                        items:
+                          description: |-
+                            A label selector requirement is a selector that contains values, a key, and an operator that
+                            relates the key and values.
+                          properties:
+                            key:
+                              description: key is the label key that the selector
+                                applies to.
+                              type: string
+                            operator:
+                              description: |-
+                                operator represents a key's relationship to a set of values.
+                                Valid operators are In, NotIn, Exists and DoesNotExist.
+                              type: string
+                            values:
+                              description: |-
+                                values is an array of string values. If the operator is In or NotIn,
+                                the values array must be non-empty. If the operator is Exists or DoesNotExist,
+                                the values array must be empty. This array is replaced during a strategic
+                                merge patch.
+                              items:
+                                type: string
+                              type: array
+                              x-kubernetes-list-type: atomic
+                          required:
+                          - key
+                          - operator
+                          type: object
+                        type: array
+                        x-kubernetes-list-type: atomic
+                      matchLabels:
+                        additionalProperties:
+                          type: string
+                        description: |-
+                          matchLabels is a map of {key,value} pairs. A single {key,value} in the matchLabels
+                          map is equivalent to an element of matchExpressions, whose key field is "key", the
+                          operator is "In", and the values array contains only "value". The requirements are ANDed.
+                        type: object
+                    type: object
+                    x-kubernetes-map-type: atomic
+                  targetNamespaces:
+                    description: |-
+                      TargetNamespaces is a literal list of namespace names. Static —
+                      not re-resolved on namespace label change. Use this when the
+                      namespace set is known at apply time and does not move.
+                    items:
+                      type: string
+                    minItems: 1
+                    type: array
+                    x-kubernetes-list-type: set
+                type: object
+              targetServiceAccounts:
+                default:
+                - default
+                description: |-
+                  TargetServiceAccounts is the list of service accounts inside each
+                  matched namespace whose tokens may exchange for a bao token via
+                  this role. Default is "default" because that's the typical SA a
+                  pod runs under absent explicit configuration.
+                items:
+                  type: string
+                minItems: 1
+                type: array
+                x-kubernetes-list-type: set
+              tokenBoundCIDRs:
+                description: |-
+                  TokenBoundCIDRs restricts which client IPs may use tokens issued
+                  from this role.
+                items:
+                  type: string
+                type: array
+                x-kubernetes-list-type: set
+              tokenExplicitMaxTTL:
+                description: |-
+                  TokenExplicitMaxTTL is a hard cap on token lifetime that ignores
+                  renewals. Bao-format duration string. Empty omits the field.
+                pattern: ^([0-9]+(ns|us|ms|s|m|h|d))+$
+                type: string
+              tokenMaxTTL:
+                description: |-
+                  TokenMaxTTL caps token renewal lifetime. Bao-format duration
+                  string (e.g. "24h", "86400s"). Empty omits the field on upsert.
+                pattern: ^([0-9]+(ns|us|ms|s|m|h|d))+$
+                type: string
+              tokenNoDefaultPolicy:
+                description: |-
+                  TokenNoDefaultPolicy, when true, prevents bao from attaching its
+                  "default" policy to tokens issued by this role. Pointer to
+                  distinguish "leave at bao's default" from explicit false.
+                type: boolean
+              tokenNumUses:
+                description: |-
+                  TokenNumUses caps how many times a token may be used; 0 means
+                  unlimited. Pointer because 0 is a meaningful explicit value
+                  (override mount default) distinct from "leave at default".
+                minimum: 0
+                type: integer
+              tokenPeriod:
+                description: |-
+                  TokenPeriod, if set, makes tokens issued from this role periodic
+                  (renewable indefinitely as long as the period elapses). Bao-format
+                  duration string. Empty omits the field.
+                pattern: ^([0-9]+(ns|us|ms|s|m|h|d))+$
+                type: string
+              tokenTTL:
+                description: |-
+                  TokenTTL is the bao-format duration string (e.g. "1h", "3600s",
+                  or compound forms like "1h30m") for the incremental token
+                  lifetime. Empty omits the field on upsert so bao falls back to
+                  mount defaults. The Pattern requires explicit units (no bare
+                  integers) so admission rejects typos like "1 hour" instead of
+                  surfacing them as a bao 400 mid-reconcile.
+                pattern: ^([0-9]+(ns|us|ms|s|m|h|d))+$
+                type: string
+              tokenType:
+                default: default
+                description: |-
+                  TokenType is the kind of token (service / batch / default /
+                  default-service / default-batch). Empty omits the field so bao
+                  uses the mount-tuned default.
+                enum:
+                - service
+                - batch
+                - default
+                - default-service
+                - default-batch
+                type: string
+            required:
+            - path
+            - policies
+            - targetNamespaces
+            - targetServiceAccounts
+            type: object
+          status:
+            description: OpenBaoKubernetesAuthRoleStatus defines the observed state.
+            properties:
+              baoWritten:
+                description: |-
+                  BaoWritten records whether this CR has ever successfully written
+                  to OpenBao. The shared reconciler uses it on the deletion path
+                  to decide whether to call BaoDelete; without a durable signal a
+                  CR whose Ready flipped True→False (e.g. token lost capability)
+                  before deletion would silently leak the bao role.
+                type: boolean
+              conditions:
+                items:
+                  description: Condition contains details for one aspect of the current
+                    state of this API Resource.
+                  properties:
+                    lastTransitionTime:
+                      description: |-
+                        lastTransitionTime is the last time the condition transitioned from one status to another.
+                        This should be when the underlying condition changed.  If that is not known, then using the time when the API field changed is acceptable.
+                      format: date-time
+                      type: string
+                    message:
+                      description: |-
+                        message is a human readable message indicating details about the transition.
+                        This may be an empty string.
+                      maxLength: 32768
+                      type: string
+                    observedGeneration:
+                      description: |-
+                        observedGeneration represents the .metadata.generation that the condition was set based upon.
+                        For instance, if .metadata.generation is currently 12, but the .status.conditions[x].observedGeneration is 9, the condition is out of date
+                        with respect to the current state of the instance.
+                      format: int64
+                      minimum: 0
+                      type: integer
+                    reason:
+                      description: |-
+                        reason contains a programmatic identifier indicating the reason for the condition's last transition.
+                        Producers of specific condition types may define expected values and meanings for this field,
+                        and whether the values are considered a guaranteed API.
+                        The value should be a CamelCase string.
+                        This field may not be empty.
+                      maxLength: 1024
+                      minLength: 1
+                      pattern: ^[A-Za-z]([A-Za-z0-9_,:]*[A-Za-z0-9_])?$
+                      type: string
+                    status:
+                      description: status of the condition, one of True, False, Unknown.
+                      enum:
+                      - "True"
+                      - "False"
+                      - Unknown
+                      type: string
+                    type:
+                      description: type of condition in CamelCase or in foo.example.com/CamelCase.
+                      maxLength: 316
+                      pattern: ^([a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*/)?(([A-Za-z0-9][-A-Za-z0-9_.]*)?[A-Za-z0-9])$
+                      type: string
+                  required:
+                  - lastTransitionTime
+                  - message
+                  - reason
+                  - status
+                  - type
+                  type: object
+                type: array
+                x-kubernetes-list-map-keys:
+                - type
+                x-kubernetes-list-type: map
+              lastWrittenBaoName:
+                description: |-
+                  LastWrittenBaoName captures the role name the controller last
+                  successfully wrote. The next reconcile compares this against
+                  the current BaoName(); a mismatch means the user renamed via
+                  spec.name and the controller deletes the previous bao role
+                  before recording the new identity.
+                type: string
+              lastWrittenOpenBaoNamespace:
+                description: |-
+                  LastWrittenOpenBaoNamespace captures the OpenBao namespace the
+                  controller last wrote into. Combined with LastWrittenBaoName
+                  forms the full identity tuple.
+                type: string
+            type: object
+        type: object
+    served: true
+    storage: true
+    subresources:
+      status: {}
+---
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  annotations:
+    controller-gen.kubebuilder.io/version: v0.19.0
+  name: openbaonamespaces.security.mto.stakater.com
+spec:
+  group: security.mto.stakater.com
+  names:
+    kind: OpenBaoNamespace
+    listKind: OpenBaoNamespaceList
+    plural: openbaonamespaces
+    shortNames:
+    - obns
+    singular: openbaonamespace
+  scope: Namespaced
+  versions:
+  - name: v1alpha1
+    schema:
+      openAPIV3Schema:
+        description: |-
+          OpenBaoNamespace is the Schema for the openbaonamespaces API.
+          Reconciles a CR to a bao-side namespace at sys/namespaces/<name>
+          (relative to spec.openbaoNamespace, if set).
+        properties:
+          apiVersion:
+            description: |-
+              APIVersion defines the versioned schema of this representation of an object.
+              Servers should convert recognized schemas to the latest internal value, and
+              may reject unrecognized values.
+              More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources
+            type: string
+          kind:
+            description: |-
+              Kind is a string value representing the REST resource this object represents.
+              Servers may infer this from the endpoint the client submits requests to.
+              Cannot be updated.
+              In CamelCase.
+              More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds
+            type: string
+          metadata:
+            type: object
+          spec:
+            description: OpenBaoNamespaceSpec defines the desired state of OpenBaoNamespace.
+            properties:
+              name:
+                description: |-
+                  Name is the bao-side namespace name (the local segment under
+                  spec.openbaoNamespace). Defaults to metadata.name when empty;
+                  override when the bao name must differ from the k8s resource
+                  name. Pattern is anchored — OpenAPI v3's `pattern` keyword does
+                  substring match by default, so an unanchored regex would accept
+                  "Bad_Name1" because the substring "a" matches.
+                maxLength: 128
+                pattern: ^[a-z0-9]([-a-z0-9]*[a-z0-9])?$
+                type: string
+              openbaoNamespace:
+                description: |-
+                  OpenBaoNamespace is the parent context this namespace lives
+                  inside. Empty (the default) creates the namespace at the bao
+                  root. To create a nested namespace `acme/sub`, set spec.name=sub
+                  and spec.openbaoNamespace=acme/. The controller calls bao's
+                  create endpoint with X-Vault-Namespace set to this value.
+                pattern: ^([a-z0-9]([-a-z0-9/]*[a-z0-9])?/?)?$
+                type: string
+            type: object
+          status:
+            description: OpenBaoNamespaceStatus defines the observed state.
+            properties:
+              baoWritten:
+                description: |-
+                  BaoWritten records whether this CR has ever successfully created
+                  the bao-side namespace. The shared reconciler uses it on the
+                  deletion path to decide whether to call BaoDelete.
+                type: boolean
+              conditions:
+                items:
+                  description: Condition contains details for one aspect of the current
+                    state of this API Resource.
+                  properties:
+                    lastTransitionTime:
+                      description: |-
+                        lastTransitionTime is the last time the condition transitioned from one status to another.
+                        This should be when the underlying condition changed.  If that is not known, then using the time when the API field changed is acceptable.
+                      format: date-time
+                      type: string
+                    message:
+                      description: |-
+                        message is a human readable message indicating details about the transition.
+                        This may be an empty string.
+                      maxLength: 32768
+                      type: string
+                    observedGeneration:
+                      description: |-
+                        observedGeneration represents the .metadata.generation that the condition was set based upon.
+                        For instance, if .metadata.generation is currently 12, but the .status.conditions[x].observedGeneration is 9, the condition is out of date
+                        with respect to the current state of the instance.
+                      format: int64
+                      minimum: 0
+                      type: integer
+                    reason:
+                      description: |-
+                        reason contains a programmatic identifier indicating the reason for the condition's last transition.
+                        Producers of specific condition types may define expected values and meanings for this field,
+                        and whether the values are considered a guaranteed API.
+                        The value should be a CamelCase string.
+                        This field may not be empty.
+                      maxLength: 1024
+                      minLength: 1
+                      pattern: ^[A-Za-z]([A-Za-z0-9_,:]*[A-Za-z0-9_])?$
+                      type: string
+                    status:
+                      description: status of the condition, one of True, False, Unknown.
+                      enum:
+                      - "True"
+                      - "False"
+                      - Unknown
+                      type: string
+                    type:
+                      description: type of condition in CamelCase or in foo.example.com/CamelCase.
+                      maxLength: 316
+                      pattern: ^([a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*/)?(([A-Za-z0-9][-A-Za-z0-9_.]*)?[A-Za-z0-9])$
+                      type: string
+                  required:
+                  - lastTransitionTime
+                  - message
+                  - reason
+                  - status
+                  - type
+                  type: object
+                type: array
+                x-kubernetes-list-map-keys:
+                - type
+                x-kubernetes-list-type: map
+              lastWrittenBaoName:
+                description: |-
+                  LastWrittenBaoName captures the bao namespace name the controller
+                  last successfully created. The next reconcile compares this against
+                  the current BaoName(); a mismatch means the user renamed via
+                  spec.name and the controller deletes the previous bao namespace
+                  before recording the new identity. Bao rejects deletion of a
+                  namespace that still contains children, so a rename of a populated
+                  bao namespace surfaces as Ready=False until the user removes the
+                  children — preferable to the silent orphan the previous behavior
+                  produced.
+                type: string
+              lastWrittenOpenBaoNamespace:
+                description: |-
+                  LastWrittenOpenBaoNamespace captures the parent OpenBao namespace
+                  the controller last wrote into. Combined with LastWrittenBaoName
+                  forms the full bao identity tuple so a rename across openbao
+                  namespaces also cleans up correctly.
+                type: string
+            type: object
+        type: object
+    served: true
+    storage: true
+    subresources:
+      status: {}
+---
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  annotations:
+    controller-gen.kubebuilder.io/version: v0.19.0
+  name: openbaopkisecretengineconfigs.security.mto.stakater.com
+spec:
+  group: security.mto.stakater.com
+  names:
+    kind: OpenBaoPKISecretEngineConfig
+    listKind: OpenBaoPKISecretEngineConfigList
+    plural: openbaopkisecretengineconfigs
+    shortNames:
+    - obpkic
+    singular: openbaopkisecretengineconfig
+  scope: Namespaced
+  versions:
+  - additionalPrinterColumns:
+    - jsonPath: .spec.type
+      name: Type
+      type: string
+    - jsonPath: .status.phase
+      name: Phase
+      type: string
+    name: v1alpha1
+    schema:
+      openAPIV3Schema:
+        description: |-
+          OpenBaoPKISecretEngineConfig is the Schema for the
+          openbaopkisecretengineconfigs API.
+        properties:
+          apiVersion:
+            description: |-
+              APIVersion defines the versioned schema of this representation of an object.
+              Servers should convert recognized schemas to the latest internal value, and
+              may reject unrecognized values.
+              More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources
+            type: string
+          kind:
+            description: |-
+              Kind is a string value representing the REST resource this object represents.
+              Servers may infer this from the endpoint the client submits requests to.
+              Cannot be updated.
+              In CamelCase.
+              More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds
+            type: string
+          metadata:
+            type: object
+          spec:
+            description: |-
+              OpenBaoPKISecretEngineConfigSpec defines the desired state. Field set, names,
+              json tags, and defaults match upstream redhat-cop/vault-config-operator
+              exactly, except spec.connection/spec.authentication are dropped (single-token
+              model) and spec.openbaoNamespace is added.
+            properties:
+              CRLDisable:
+                description: CRLDisable turns off CRL building.
+                type: boolean
+              CRLDistributionPoints:
+                description: CRLDistributionPoints are the CRL distribution-point
+                  URLs.
+                items:
+                  type: string
+                type: array
+              CRLExpiry:
+                default: 72h
+                description: CRLExpiry is the CRL rotation period (bao duration).
+                type: string
+              IPSans:
+                description: IPSans is a comma-separated list of IP subject-alternative
+                  names.
+                type: string
+              TTL:
+                description: |-
+                  TTL is the validity period of the CA cert (bao duration). Empty = bao
+                  default.
+                type: string
+              URISans:
+                description: URISans is a comma-separated list of URI subject-alternative
+                  names.
+                type: string
+              altNames:
+                description: AltNames is a comma-separated list of subject-alternative
+                  DNS/email names.
+                type: string
+              certificateKey:
+                default: tls.crt
+                description: |-
+                  CertificateKey is the key within ExternalSignSecret holding the signed
+                  cert PEM.
+                type: string
+              commonName:
+                description: CommonName is the X.509 CN of the generated CA cert.
+                maxLength: 253
+                minLength: 1
+                type: string
+              country:
+                description: Country is the X.509 subject Country.
+                type: string
+              excludeCnFromSans:
+                description: ExcludeCnFromSans omits the CN from the generated SANs.
+                type: boolean
+              externalSignSecret:
+                description: |-
+                  ExternalSignSecret references a Secret holding the externally-signed
+                  intermediate cert (offline-root signing). Mutually exclusive with
+                  InternalSign. type=intermediate only.
+                properties:
+                  name:
+                    default: ""
+                    description: |-
+                      Name of the referent.
+                      This field is effectively required, but due to backwards compatibility is
+                      allowed to be empty. Instances of this type with an empty value here are
+                      almost certainly wrong.
+                      More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#names
+                    type: string
+                type: object
+                x-kubernetes-map-type: atomic
+              format:
+                default: pem
+                description: Format is the output format of the issued cert.
+                enum:
+                - pem
+                - pem_bundle
+                - der
+                type: string
+              internalSign:
+                description: |-
+                  InternalSign points at a signing CA mount that signs this intermediate's
+                  CSR in-bao. Mutually exclusive with ExternalSignSecret. type=intermediate
+                  only. By default the signing CA must live in this CR's openbaoNamespace;
+                  set internalSign.openbaoNamespace to sign against a CA in a different
+                  OpenBao namespace (e.g. a platform CA signing per-tenant intermediates).
+                properties:
+                  name:
+                    description: Name is the signing CA's bao mount path (e.g. "pki-platform").
+                    maxLength: 128
+                    minLength: 1
+                    pattern: ^[a-zA-Z0-9][a-zA-Z0-9_./-]*$
+                    type: string
+                  openbaoNamespace:
+                    description: |-
+                      OpenBaoNamespace is the signing CA's OpenBao namespace. Empty = the
+                      intermediate CR's own openbaoNamespace (same-namespace signing — the
+                      historical behavior). Set this to sign against a CA in another namespace.
+                    pattern: ^([a-z0-9]([-a-z0-9/]*[a-z0-9])?/?)?$
+                    type: string
+                required:
+                - name
+                type: object
+              issuingCertificates:
+                description: IssuingCertificates are the AIA issuing-cert URLs published
+                  in issued certs.
+                items:
+                  type: string
+                type: array
+              keyBits:
+                default: 2048
+                description: KeyBits is the key size in bits.
+                type: integer
+              keyType:
+                default: rsa
+                description: KeyType is the public-key algorithm.
+                enum:
+                - rsa
+                - ec
+                type: string
+              locality:
+                description: Locality is the X.509 subject Locality.
+                type: string
+              maxPathLength:
+                default: -1
+                description: MaxPathLength is the CA's pathlen basic constraint. -1
+                  = no limit.
+                type: integer
+              ocspServers:
+                description: OCSPServers are the OCSP responder URLs.
+                items:
+                  type: string
+                type: array
+              openbaoNamespace:
+                description: |-
+                  OpenBaoNamespace targets a specific OpenBao namespace via
+                  X-Vault-Namespace. Empty = root. Replaces upstream's
+                  authentication.namespace.
+                pattern: ^([a-z0-9]([-a-z0-9/]*[a-z0-9])?/?)?$
+                type: string
+              organization:
+                description: Organization is the X.509 subject Organization.
+                type: string
+              otherSans:
+                description: OtherSans is a comma-separated list of custom OID SANs.
+                type: string
+              ou:
+                description: OU is the X.509 subject Organizational Unit.
+                type: string
+              path:
+                description: |-
+                  Path is the bao-side PKI mount path (e.g. "pki", "pki/internal"). Must
+                  match an existing OpenBaoSecretEngine of kind=pki at the same path; the
+                  controller does NOT enable the mount itself.
+                maxLength: 128
+                minLength: 1
+                pattern: ^[a-zA-Z0-9][a-zA-Z0-9_./-]*$
+                type: string
+              permittedDnsDomains:
+                description: |-
+                  PermittedDnsDomains is the X.509 name-constraints DNS allow-list applied
+                  to the CA cert.
+                items:
+                  type: string
+                type: array
+              postalCode:
+                description: PostalCode is the X.509 subject Postal Code.
+                type: string
+              privateKeyFormat:
+                description: PrivateKeyFormat is the output format of the private
+                  key.
+                type: string
+              privateKeyType:
+                default: internal
+                description: |-
+                  PrivateKeyType controls whether the generated key stays internal to bao
+                  or is exported.
+                enum:
+                - internal
+                - exported
+                type: string
+              province:
+                description: Province is the X.509 subject Province.
+                type: string
+              publishCABundleConfigMap:
+                description: |-
+                  PublishCABundleConfigMap, when set, names a ConfigMap (in this CR's
+                  namespace) the controller keeps populated with the active CA cert PEM
+                  (key "ca.crt"). It exists so a trust-distribution tool (cert-manager
+                  trust-manager) can source this CA for cross-tenant trust bundles. Empty
+                  = don't publish. The ConfigMap is owner-ref'd to this CR (GC on delete).
+                maxLength: 253
+                pattern: ^[a-z0-9]([-a-z0-9.]*[a-z0-9])?$
+                type: string
+              serialNumber:
+                description: SerialNumber is the X.509 subject Serial Number (not
+                  the cert serial).
+                type: string
+              streetAddress:
+                description: StreetAddress is the X.509 subject Street Address.
+                type: string
+              type:
+                default: root
+                description: Type selects root vs intermediate CA generation.
+                enum:
+                - root
+                - intermediate
+                type: string
+            required:
+            - commonName
+            - path
+            - type
+            type: object
+          status:
+            description: OpenBaoPKISecretEngineConfigStatus defines the observed state.
+            properties:
+              baoWritten:
+                description: BaoWritten records whether this CR has ever successfully
+                  written a CA.
+                type: boolean
+              caSerialNumber:
+                description: CASerialNumber is the X.509 serial of the active CA cert.
+                type: string
+              conditions:
+                items:
+                  description: Condition contains details for one aspect of the current
+                    state of this API Resource.
+                  properties:
+                    lastTransitionTime:
+                      description: |-
+                        lastTransitionTime is the last time the condition transitioned from one status to another.
+                        This should be when the underlying condition changed.  If that is not known, then using the time when the API field changed is acceptable.
+                      format: date-time
+                      type: string
+                    message:
+                      description: |-
+                        message is a human readable message indicating details about the transition.
+                        This may be an empty string.
+                      maxLength: 32768
+                      type: string
+                    observedGeneration:
+                      description: |-
+                        observedGeneration represents the .metadata.generation that the condition was set based upon.
+                        For instance, if .metadata.generation is currently 12, but the .status.conditions[x].observedGeneration is 9, the condition is out of date
+                        with respect to the current state of the instance.
+                      format: int64
+                      minimum: 0
+                      type: integer
+                    reason:
+                      description: |-
+                        reason contains a programmatic identifier indicating the reason for the condition's last transition.
+                        Producers of specific condition types may define expected values and meanings for this field,
+                        and whether the values are considered a guaranteed API.
+                        The value should be a CamelCase string.
+                        This field may not be empty.
+                      maxLength: 1024
+                      minLength: 1
+                      pattern: ^[A-Za-z]([A-Za-z0-9_,:]*[A-Za-z0-9_])?$
+                      type: string
+                    status:
+                      description: status of the condition, one of True, False, Unknown.
+                      enum:
+                      - "True"
+                      - "False"
+                      - Unknown
+                      type: string
+                    type:
+                      description: type of condition in CamelCase or in foo.example.com/CamelCase.
+                      maxLength: 316
+                      pattern: ^([a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*/)?(([A-Za-z0-9][-A-Za-z0-9_.]*)?[A-Za-z0-9])$
+                      type: string
+                  required:
+                  - lastTransitionTime
+                  - message
+                  - reason
+                  - status
+                  - type
+                  type: object
+                type: array
+                x-kubernetes-list-map-keys:
+                - type
+                x-kubernetes-list-type: map
+              exported:
+                description: Exported records that the CSR was exported to its Secret
+                  (upstream).
+                type: boolean
+              generated:
+                description: Generated records that the intermediate CSR was generated
+                  (upstream).
+                type: boolean
+              lastWrittenBaoName:
+                description: LastWrittenBaoName records the PKI mount path last written
+                  into.
+                type: string
+              lastWrittenOpenBaoNamespace:
+                description: LastWrittenOpenBaoNamespace tracks the bao namespace
+                  context.
+                type: string
+              phase:
+                description: |-
+                  Phase tracks the CA-bootstrap state: "" → Active, or
+                  AwaitingExternalSignature for an external-sign intermediate.
+                type: string
+              signed:
+                description: Signed records that the intermediate was signed + set-signed
+                  (upstream).
+                type: boolean
+            type: object
+        type: object
+    served: true
+    storage: true
+    subresources:
+      status: {}
+---
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  annotations:
+    controller-gen.kubebuilder.io/version: v0.19.0
+  name: openbaopkisecretengineroles.security.mto.stakater.com
+spec:
+  group: security.mto.stakater.com
+  names:
+    kind: OpenBaoPKISecretEngineRole
+    listKind: OpenBaoPKISecretEngineRoleList
+    plural: openbaopkisecretengineroles
+    shortNames:
+    - obpkir
+    singular: openbaopkisecretenginerole
+  scope: Namespaced
+  versions:
+  - name: v1alpha1
+    schema:
+      openAPIV3Schema:
+        description: |-
+          OpenBaoPKISecretEngineRole is the Schema for the
+          openbaopkisecretengineroles API.
+        properties:
+          apiVersion:
+            description: |-
+              APIVersion defines the versioned schema of this representation of an object.
+              Servers should convert recognized schemas to the latest internal value, and
+              may reject unrecognized values.
+              More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources
+            type: string
+          kind:
+            description: |-
+              Kind is a string value representing the REST resource this object represents.
+              Servers may infer this from the endpoint the client submits requests to.
+              Cannot be updated.
+              In CamelCase.
+              More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds
+            type: string
+          metadata:
+            type: object
+          spec:
+            description: |-
+              OpenBaoPKISecretEngineRoleSpec mirrors bao's PKI role API.
+              Field-by-field semantics live in the OpenBao docs at
+              /pki/api-docs/index.html#create-update-role.
+            properties:
+              allowAnyName:
+                type: boolean
+              allowBareDomains:
+                type: boolean
+              allowGlobDomains:
+                type: boolean
+              allowIpSans:
+                type: boolean
+              allowSubdomains:
+                type: boolean
+              allowedDomains:
+                description: AllowedDomains restricts the CN/SAN of issued certs.
+                items:
+                  type: string
+                type: array
+              clientFlag:
+                type: boolean
+              codeSigningFlag:
+                type: boolean
+              emailProtection:
+                type: boolean
+              enforceHostnames:
+                type: boolean
+              extKeyUsage:
+                items:
+                  type: string
+                type: array
+              generateLease:
+                type: boolean
+              keyBits:
+                description: 'KeyBits: 2048|3072|4096 for RSA, 224|256|384|521 for
+                  EC.'
+                maximum: 8192
+                minimum: 0
+                type: integer
+              keyType:
+                description: 'KeyType: rsa | ec | ed25519 | any.'
+                enum:
+                - rsa
+                - ec
+                - ed25519
+                - any
+                type: string
+              keyUsage:
+                description: |-
+                  KeyUsage / ExtKeyUsage are X.509 strings (e.g. DigitalSignature,
+                  KeyEncipherment, ServerAuth). Bao validates the values.
+                items:
+                  type: string
+                type: array
+              maxTtl:
+                pattern: ^([0-9]+(ns|us|ms|s|m|h|d))+$
+                type: string
+              name:
+                description: Name is the bao-side role name. Defaults to metadata.name.
+                pattern: ^[a-z0-9]([-a-z0-9]*[a-z0-9])?$
+                type: string
+              noStore:
+                type: boolean
+              openbaoNamespace:
+                description: OpenBaoNamespace targets a bao namespace.
+                pattern: ^([a-z0-9]([-a-z0-9/]*[a-z0-9])?/?)?$
+                type: string
+              path:
+                description: |-
+                  Path is the bao-side PKI mount (e.g. "pki", "pki/internal").
+                  Must match an existing OpenBaoSecretEngine of kind=pki at the
+                  same path; the mount must also have a CA configured (typically
+                  via OpenBaoPKISecretEngineConfig) before issued certs work.
+                maxLength: 128
+                minLength: 1
+                pattern: ^[a-zA-Z0-9][a-zA-Z0-9_./-]*$
+                type: string
+              requireCN:
+                type: boolean
+              serverFlag:
+                description: |-
+                  ServerFlag / ClientFlag / CodeSigningFlag / EmailProtection
+                  gate which extKeyUsage values bao will sign. Default is
+                  server+client (matches bao's defaults when omitted).
+                type: boolean
+              ttl:
+                description: TTL / MaxTTL are bao duration strings ("1h", "3600s").
+                pattern: ^([0-9]+(ns|us|ms|s|m|h|d))+$
+                type: string
+            required:
+            - path
+            type: object
+          status:
+            description: OpenBaoPKISecretEngineRoleStatus defines the observed state.
+            properties:
+              baoWritten:
+                type: boolean
+              conditions:
+                items:
+                  description: Condition contains details for one aspect of the current
+                    state of this API Resource.
+                  properties:
+                    lastTransitionTime:
+                      description: |-
+                        lastTransitionTime is the last time the condition transitioned from one status to another.
+                        This should be when the underlying condition changed.  If that is not known, then using the time when the API field changed is acceptable.
+                      format: date-time
+                      type: string
+                    message:
+                      description: |-
+                        message is a human readable message indicating details about the transition.
+                        This may be an empty string.
+                      maxLength: 32768
+                      type: string
+                    observedGeneration:
+                      description: |-
+                        observedGeneration represents the .metadata.generation that the condition was set based upon.
+                        For instance, if .metadata.generation is currently 12, but the .status.conditions[x].observedGeneration is 9, the condition is out of date
+                        with respect to the current state of the instance.
+                      format: int64
+                      minimum: 0
+                      type: integer
+                    reason:
+                      description: |-
+                        reason contains a programmatic identifier indicating the reason for the condition's last transition.
+                        Producers of specific condition types may define expected values and meanings for this field,
+                        and whether the values are considered a guaranteed API.
+                        The value should be a CamelCase string.
+                        This field may not be empty.
+                      maxLength: 1024
+                      minLength: 1
+                      pattern: ^[A-Za-z]([A-Za-z0-9_,:]*[A-Za-z0-9_])?$
+                      type: string
+                    status:
+                      description: status of the condition, one of True, False, Unknown.
+                      enum:
+                      - "True"
+                      - "False"
+                      - Unknown
+                      type: string
+                    type:
+                      description: type of condition in CamelCase or in foo.example.com/CamelCase.
+                      maxLength: 316
+                      pattern: ^([a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*/)?(([A-Za-z0-9][-A-Za-z0-9_.]*)?[A-Za-z0-9])$
+                      type: string
+                  required:
+                  - lastTransitionTime
+                  - message
+                  - reason
+                  - status
+                  - type
+                  type: object
+                type: array
+                x-kubernetes-list-map-keys:
+                - type
+                x-kubernetes-list-type: map
+              lastWrittenBaoName:
+                type: string
+              lastWrittenOpenBaoNamespace:
+                type: string
+              lastWrittenPath:
+                description: |-
+                  LastWrittenPath captures the bao mount path the controller last
+                  wrote a role into. Without this, a CR that simultaneously edits
+                  spec.name AND spec.path would orphan the role at the OLD path —
+                  the rename-cleanup BaoDeleteIdentity would target the NEW path
+                  and silently 404. The controller reads this field on rename
+                  cleanup so the previous role is removed at its real bao
+                  location.
+                type: string
+            type: object
+        type: object
+    served: true
+    storage: true
+    subresources:
+      status: {}
+---
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  annotations:
+    controller-gen.kubebuilder.io/version: v0.19.0
+  name: openbaopolicies.security.mto.stakater.com
+spec:
+  group: security.mto.stakater.com
+  names:
+    kind: OpenBaoPolicy
+    listKind: OpenBaoPolicyList
+    plural: openbaopolicies
+    shortNames:
+    - obp
+    singular: openbaopolicy
+  scope: Namespaced
+  versions:
+  - name: v1alpha1
+    schema:
+      openAPIV3Schema:
+        description: OpenBaoPolicy is the Schema for the openbaopolicies API.
+        properties:
+          apiVersion:
+            description: |-
+              APIVersion defines the versioned schema of this representation of an object.
+              Servers should convert recognized schemas to the latest internal value, and
+              may reject unrecognized values.
+              More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources
+            type: string
+          kind:
+            description: |-
+              Kind is a string value representing the REST resource this object represents.
+              Servers may infer this from the endpoint the client submits requests to.
+              Cannot be updated.
+              In CamelCase.
+              More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds
+            type: string
+          metadata:
+            type: object
+          spec:
+            description: OpenBaoPolicySpec defines the desired state of OpenBaoPolicy.
+            properties:
+              name:
+                description: |-
+                  Name of the policy as stored in OpenBao. Takes precedence over
+                  metadata.name when set. Must match OpenBao's policy naming rules.
+                  Pattern is anchored — OpenAPI v3's `pattern` keyword does substring
+                  match by default, so an unanchored regex would accept "Bad_Name1"
+                  because the substring "a" matches.
+                pattern: ^[a-z0-9]([-a-z0-9]*[a-z0-9])?$
+                type: string
+              openbaoNamespace:
+                description: |-
+                  OpenBaoNamespace targets a specific OpenBao namespace for this
+                  policy's API calls (sets the X-Vault-Namespace header). Empty (the
+                  default) means the root namespace and matches pre-namespace-support
+                  behaviour. Nested namespaces are allowed via slash-separated
+                  segments (e.g. "acme/sub"); a trailing slash is accepted but not
+                  required (bao accepts both forms). The pattern rejects uppercase
+                  and whitespace; bao itself rejects more nuanced shapes (reserved
+                  names, leading slash) and surfaces a 4xx at write time.
+                pattern: ^([a-z0-9]([-a-z0-9/]*[a-z0-9])?/?)?$
+                type: string
+              policy:
+                description: Policy is an OpenBao policy body expressed in HCL.
+                minLength: 1
+                type: string
+            required:
+            - policy
+            type: object
+          status:
+            description: OpenBaoPolicyStatus defines the observed state of OpenBaoPolicy.
+            properties:
+              baoWritten:
+                description: |-
+                  BaoWritten records whether this CR has ever successfully written to
+                  OpenBao. Once set true it is never cleared. The shared reconciler
+                  uses it on the deletion path to decide whether to call BaoDelete:
+                  without a durable signal we have to fall back to "is Ready=True
+                  right now", which incorrectly skips cleanup when Ready flipped
+                  True→False (e.g. token lost capability) before the user deleted
+                  the CR, leaving an orphan.
+                type: boolean
+              conditions:
+                items:
+                  description: Condition contains details for one aspect of the current
+                    state of this API Resource.
+                  properties:
+                    lastTransitionTime:
+                      description: |-
+                        lastTransitionTime is the last time the condition transitioned from one status to another.
+                        This should be when the underlying condition changed.  If that is not known, then using the time when the API field changed is acceptable.
+                      format: date-time
+                      type: string
+                    message:
+                      description: |-
+                        message is a human readable message indicating details about the transition.
+                        This may be an empty string.
+                      maxLength: 32768
+                      type: string
+                    observedGeneration:
+                      description: |-
+                        observedGeneration represents the .metadata.generation that the condition was set based upon.
+                        For instance, if .metadata.generation is currently 12, but the .status.conditions[x].observedGeneration is 9, the condition is out of date
+                        with respect to the current state of the instance.
+                      format: int64
+                      minimum: 0
+                      type: integer
+                    reason:
+                      description: |-
+                        reason contains a programmatic identifier indicating the reason for the condition's last transition.
+                        Producers of specific condition types may define expected values and meanings for this field,
+                        and whether the values are considered a guaranteed API.
+                        The value should be a CamelCase string.
+                        This field may not be empty.
+                      maxLength: 1024
+                      minLength: 1
+                      pattern: ^[A-Za-z]([A-Za-z0-9_,:]*[A-Za-z0-9_])?$
+                      type: string
+                    status:
+                      description: status of the condition, one of True, False, Unknown.
+                      enum:
+                      - "True"
+                      - "False"
+                      - Unknown
+                      type: string
+                    type:
+                      description: type of condition in CamelCase or in foo.example.com/CamelCase.
+                      maxLength: 316
+                      pattern: ^([a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*/)?(([A-Za-z0-9][-A-Za-z0-9_.]*)?[A-Za-z0-9])$
+                      type: string
+                  required:
+                  - lastTransitionTime
+                  - message
+                  - reason
+                  - status
+                  - type
+                  type: object
+                type: array
+                x-kubernetes-list-map-keys:
+                - type
+                x-kubernetes-list-type: map
+              lastWrittenBaoName:
+                description: |-
+                  LastWrittenBaoName captures the bao policy name the controller last
+                  successfully wrote. The next reconcile compares this against the
+                  current BaoName(); a mismatch means the user renamed via spec.name
+                  and the controller deletes the previous bao policy before recording
+                  the new identity.
+                type: string
+              lastWrittenOpenBaoNamespace:
+                description: |-
+                  LastWrittenOpenBaoNamespace captures the OpenBao namespace the
+                  controller last successfully wrote into. Combined with
+                  LastWrittenBaoName forms the full bao identity tuple so a rename
+                  across openbao namespaces also cleans up correctly.
+                type: string
+            type: object
+        type: object
+    served: true
+    storage: true
+    subresources:
+      status: {}
+---
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  annotations:
+    controller-gen.kubebuilder.io/version: v0.19.0
+  name: openbaosecretengines.security.mto.stakater.com
+spec:
+  group: security.mto.stakater.com
+  names:
+    kind: OpenBaoSecretEngine
+    listKind: OpenBaoSecretEngineList
+    plural: openbaosecretengines
+    shortNames:
+    - obse
+    singular: openbaosecretengine
+  scope: Namespaced
+  versions:
+  - name: v1alpha1
+    schema:
+      openAPIV3Schema:
+        description: |-
+          OpenBaoSecretEngine is the Schema for the openbaosecretengines API.
+          Reconciles a CR to a bao-side secret-engine mount at sys/mounts/<path>.
+        properties:
+          apiVersion:
+            description: |-
+              APIVersion defines the versioned schema of this representation of an object.
+              Servers should convert recognized schemas to the latest internal value, and
+              may reject unrecognized values.
+              More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources
+            type: string
+          kind:
+            description: |-
+              Kind is a string value representing the REST resource this object represents.
+              Servers may infer this from the endpoint the client submits requests to.
+              Cannot be updated.
+              In CamelCase.
+              More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds
+            type: string
+          metadata:
+            type: object
+          spec:
+            description: |-
+              OpenBaoSecretEngineSpec defines the desired state of
+              OpenBaoSecretEngine. Exactly one of the engine-type slots must be
+              set; IsValid + the CRD's XValidation rule enforce the XOR.
+            properties:
+              description:
+                description: |-
+                  Description is the bao-side mount description. Free-form;
+                  mirrored verbatim into bao's options.
+                maxLength: 512
+                type: string
+              kvV2:
+                description: |-
+                  KvV2 selects a kv-v2 secret engine mount. Mutually exclusive
+                  with the other engine slots.
+                type: object
+              openbaoNamespace:
+                description: |-
+                  OpenBaoNamespace targets a specific OpenBao namespace for this
+                  mount's API calls (sets the X-Vault-Namespace header). Empty
+                  (the default) means the root namespace.
+                pattern: ^([a-z0-9]([-a-z0-9/]*[a-z0-9])?/?)?$
+                type: string
+              path:
+                description: |-
+                  Path is the bao-side mount path (e.g. "secret", "transit",
+                  "pki"). Trailing slashes are accepted but stripped before the
+                  bao API call.
+                maxLength: 128
+                minLength: 1
+                pattern: ^[a-zA-Z0-9][a-zA-Z0-9_./-]*$
+                type: string
+              pki:
+                description: |-
+                  PKI selects a PKI secret engine mount. Mutually exclusive with
+                  the other engine slots. The PKI mount holds the CA configured
+                  via OpenBaoPKISecretEngineConfig and the issuance roles defined
+                  via OpenBaoPKISecretEngineRole.
+                type: object
+              transit:
+                description: |-
+                  Transit selects a transit secret engine mount. Mutually
+                  exclusive with the other engine slots.
+                type: object
+            required:
+            - path
+            type: object
+          status:
+            description: OpenBaoSecretEngineStatus defines the observed state of OpenBaoSecretEngine.
+            properties:
+              baoWritten:
+                description: |-
+                  BaoWritten records whether this CR has ever successfully written
+                  to OpenBao. Once set true it is never cleared. The shared
+                  reconciler uses it on the deletion path to decide whether to call
+                  BaoDelete.
+                type: boolean
+              conditions:
+                items:
+                  description: Condition contains details for one aspect of the current
+                    state of this API Resource.
+                  properties:
+                    lastTransitionTime:
+                      description: |-
+                        lastTransitionTime is the last time the condition transitioned from one status to another.
+                        This should be when the underlying condition changed.  If that is not known, then using the time when the API field changed is acceptable.
+                      format: date-time
+                      type: string
+                    message:
+                      description: |-
+                        message is a human readable message indicating details about the transition.
+                        This may be an empty string.
+                      maxLength: 32768
+                      type: string
+                    observedGeneration:
+                      description: |-
+                        observedGeneration represents the .metadata.generation that the condition was set based upon.
+                        For instance, if .metadata.generation is currently 12, but the .status.conditions[x].observedGeneration is 9, the condition is out of date
+                        with respect to the current state of the instance.
+                      format: int64
+                      minimum: 0
+                      type: integer
+                    reason:
+                      description: |-
+                        reason contains a programmatic identifier indicating the reason for the condition's last transition.
+                        Producers of specific condition types may define expected values and meanings for this field,
+                        and whether the values are considered a guaranteed API.
+                        The value should be a CamelCase string.
+                        This field may not be empty.
+                      maxLength: 1024
+                      minLength: 1
+                      pattern: ^[A-Za-z]([A-Za-z0-9_,:]*[A-Za-z0-9_])?$
+                      type: string
+                    status:
+                      description: status of the condition, one of True, False, Unknown.
+                      enum:
+                      - "True"
+                      - "False"
+                      - Unknown
+                      type: string
+                    type:
+                      description: type of condition in CamelCase or in foo.example.com/CamelCase.
+                      maxLength: 316
+                      pattern: ^([a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*/)?(([A-Za-z0-9][-A-Za-z0-9_.]*)?[A-Za-z0-9])$
+                      type: string
+                  required:
+                  - lastTransitionTime
+                  - message
+                  - reason
+                  - status
+                  - type
+                  type: object
+                type: array
+                x-kubernetes-list-map-keys:
+                - type
+                x-kubernetes-list-type: map
+              lastWrittenBaoName:
+                description: |-
+                  LastWrittenBaoName captures the mount path the controller last
+                  successfully enabled. The next reconcile compares this against the
+                  current BaoName(); a mismatch means the user renamed via
+                  spec.path and the controller disables the previous mount before
+                  recording the new identity.
+                type: string
+              lastWrittenOpenBaoNamespace:
+                description: |-
+                  LastWrittenOpenBaoNamespace captures the OpenBao namespace the
+                  mount was last enabled in. Combined with LastWrittenBaoName forms
+                  the full identity tuple so a rename across openbao namespaces also
+                  cleans up correctly.
+                type: string
+            type: object
+        type: object
+        x-kubernetes-validations:
+        - message: exactly one of spec.kvV2, spec.transit, spec.pki must be set
+          rule: '[has(self.spec.kvV2), has(self.spec.transit), has(self.spec.pki)].filter(x,
+            x).size() == 1'
+    served: true
+    storage: true
+    subresources:
+      status: {}
+---
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  annotations:
+    controller-gen.kubebuilder.io/version: v0.19.0
+  name: openbaotransitkeys.security.mto.stakater.com
+spec:
+  group: security.mto.stakater.com
+  names:
+    kind: OpenBaoTransitKey
+    listKind: OpenBaoTransitKeyList
+    plural: openbaotransitkeys
+    shortNames:
+    - obtk
+    singular: openbaotransitkey
+  scope: Namespaced
+  versions:
+  - name: v1alpha1
+    schema:
+      openAPIV3Schema:
+        description: OpenBaoTransitKey is the Schema for the openbaotransitkeys API.
+        properties:
+          apiVersion:
+            description: |-
+              APIVersion defines the versioned schema of this representation of an object.
+              Servers should convert recognized schemas to the latest internal value, and
+              may reject unrecognized values.
+              More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources
+            type: string
+          kind:
+            description: |-
+              Kind is a string value representing the REST resource this object represents.
+              Servers may infer this from the endpoint the client submits requests to.
+              Cannot be updated.
+              In CamelCase.
+              More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds
+            type: string
+          metadata:
+            type: object
+          spec:
+            description: |-
+              OpenBaoTransitKeySpec is the user-facing schema for a transit key.
+              Fields fall into three groups (immutable post-create, mutable, accepted
+              on both endpoints). See the package comment for the overall design.
+            properties:
+              allowPlaintextBackup:
+                description: |-
+                  AllowPlaintextBackup permits transit/backup/<name> to include
+                  plaintext key material. Same one-way semantics as Exportable.
+                type: boolean
+              autoRotatePeriod:
+                description: |-
+                  AutoRotatePeriod is a Go duration ("720h"; "30d" is not a Go
+                  duration shape — use "720h"). "0" or empty disables auto-rotation.
+                pattern: ^(0|[0-9]+(s|m|h))+$
+                type: string
+              convergentEncryption:
+                description: |-
+                  ConvergentEncryption requires derived=true; same plaintext +
+                  context yields the same ciphertext. Immutable post-create.
+                type: boolean
+              deletionAllowed:
+                description: |-
+                  DeletionAllowed gates DELETE transit/keys/<name> on the bao side.
+                  CR deletion when this is unset or false surfaces Ready=False
+                  reason=DeleteBlocked; the user flips it true and the next
+                  reconcile completes the delete.
+                type: boolean
+              derived:
+                description: |-
+                  Derived enables key derivation (per-context subkeys). Immutable
+                  post-create.
+                type: boolean
+              exportable:
+                description: |-
+                  Exportable allows /export. Mutable but one-way: once enabled, bao
+                  refuses to disable it. The wrapper surfaces bao's 400 verbatim.
+                type: boolean
+              keySize:
+                description: |-
+                  KeySize sets the byte size for hmac keys; ignored by every other
+                  type. Immutable post-create.
+                maximum: 512
+                minimum: 32
+                type: integer
+              minDecryptionVersion:
+                description: |-
+                  MinDecryptionVersion sets the floor for decrypt operations. 0
+                  means all versions allowed.
+                minimum: 0
+                type: integer
+              minEncryptionVersion:
+                description: |-
+                  MinEncryptionVersion sets the floor for encrypt operations. 0
+                  means latest.
+                minimum: 0
+                type: integer
+              name:
+                description: Name is the bao-side transit key name. Required, immutable.
+                maxLength: 128
+                minLength: 1
+                pattern: ^[a-zA-Z0-9][a-zA-Z0-9_.-]*$
+                type: string
+              openbaoNamespace:
+                description: OpenBaoNamespace targets a bao namespace via X-Vault-Namespace.
+                pattern: ^([a-z0-9]([-a-z0-9/]*[a-z0-9])?/?)?$
+                type: string
+              path:
+                default: transit
+                description: |-
+                  Path is the parent transit secret-engine mount (must be type=transit;
+                  bao 400s otherwise). Defaults to "transit"; the omitempty JSON tag
+                  is intentional — kubebuilder defaulting only fires when the field
+                  is absent from the wire body, so without omitempty a Go-side
+                  zero-value would serialize as `path: ""` and bypass the default.
+                maxLength: 128
+                minLength: 1
+                pattern: ^[a-zA-Z0-9][a-zA-Z0-9_./-]*$
+                type: string
+              type:
+                default: aes256-gcm96
+                description: |-
+                  Type is the transit key algorithm. Immutable post-create. omitempty
+                  JSON tag is intentional — see Path's note for the kubebuilder
+                  defaulting interaction.
+                enum:
+                - aes128-gcm96
+                - aes256-gcm96
+                - chacha20-poly1305
+                - ed25519
+                - ecdsa-p256
+                - ecdsa-p384
+                - ecdsa-p521
+                - rsa-2048
+                - rsa-3072
+                - rsa-4096
+                - hmac
+                - managed_key
+                type: string
+            required:
+            - name
+            - path
+            - type
+            type: object
+          status:
+            description: |-
+              OpenBaoTransitKeyStatus carries reconciler-managed fields plus
+              observed-only fields surfaced from bao on read.
+            properties:
+              baoWritten:
+                type: boolean
+              conditions:
+                items:
+                  description: Condition contains details for one aspect of the current
+                    state of this API Resource.
+                  properties:
+                    lastTransitionTime:
+                      description: |-
+                        lastTransitionTime is the last time the condition transitioned from one status to another.
+                        This should be when the underlying condition changed.  If that is not known, then using the time when the API field changed is acceptable.
+                      format: date-time
+                      type: string
+                    message:
+                      description: |-
+                        message is a human readable message indicating details about the transition.
+                        This may be an empty string.
+                      maxLength: 32768
+                      type: string
+                    observedGeneration:
+                      description: |-
+                        observedGeneration represents the .metadata.generation that the condition was set based upon.
+                        For instance, if .metadata.generation is currently 12, but the .status.conditions[x].observedGeneration is 9, the condition is out of date
+                        with respect to the current state of the instance.
+                      format: int64
+                      minimum: 0
+                      type: integer
+                    reason:
+                      description: |-
+                        reason contains a programmatic identifier indicating the reason for the condition's last transition.
+                        Producers of specific condition types may define expected values and meanings for this field,
+                        and whether the values are considered a guaranteed API.
+                        The value should be a CamelCase string.
+                        This field may not be empty.
+                      maxLength: 1024
+                      minLength: 1
+                      pattern: ^[A-Za-z]([A-Za-z0-9_,:]*[A-Za-z0-9_])?$
+                      type: string
+                    status:
+                      description: status of the condition, one of True, False, Unknown.
+                      enum:
+                      - "True"
+                      - "False"
+                      - Unknown
+                      type: string
+                    type:
+                      description: type of condition in CamelCase or in foo.example.com/CamelCase.
+                      maxLength: 316
+                      pattern: ^([a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*/)?(([A-Za-z0-9][-A-Za-z0-9_.]*)?[A-Za-z0-9])$
+                      type: string
+                  required:
+                  - lastTransitionTime
+                  - message
+                  - reason
+                  - status
+                  - type
+                  type: object
+                type: array
+                x-kubernetes-list-map-keys:
+                - type
+                x-kubernetes-list-type: map
+              creationTime:
+                description: CreationTime is the bao-side key creation timestamp (RFC3339).
+                type: string
+              lastWrittenBaoName:
+                type: string
+              lastWrittenOpenBaoNamespace:
+                type: string
+              lastWrittenPath:
+                description: |-
+                  LastWrittenPath captures the bao mount path the controller last
+                  wrote a key into. Without this, a CR that simultaneously edits
+                  spec.name AND spec.path would orphan the old key — the rename-
+                  cleanup BaoDeleteIdentity would target the new path and silently
+                  404. Same shape as OpenBaoPKISecretEngineRole's status.
+                type: string
+              latestVersion:
+                description: |-
+                  LatestVersion is bao's current key version. Apps targeting a
+                  specific version pin against this field. Refreshed on every
+                  reconcile (≤ PeriodicInterval staleness).
+                type: integer
+              supportsDecryption:
+                type: boolean
+              supportsDerivation:
+                type: boolean
+              supportsEncryption:
+                description: |-
+                  Capability flags surfaced from bao. Useful for callers that want
+                  to know "does this key support signing?" without mapping the
+                  type field client-side.
+                type: boolean
+              supportsSigning:
+                type: boolean
+            type: object
+        type: object
+    served: true
+    storage: true
+    subresources:
+      status: {}
 ---
 apiVersion: v1
 kind: ServiceAccount
 metadata:
   labels:
     app.kubernetes.io/managed-by: kustomize
-    app.kubernetes.io/name: mto-extension-openbao
-  name: mto-extension-openbao-controller-manager
-  namespace: mto-extension-openbao-system
+    app.kubernetes.io/name: openbao-config-operator
+  name: openbao-config-operator-controller-manager
+  namespace: openbao-config-operator-system
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: Role
 metadata:
   labels:
     app.kubernetes.io/managed-by: kustomize
-    app.kubernetes.io/name: mto-extension-openbao
-  name: mto-extension-openbao-leader-election-role
-  namespace: mto-extension-openbao-system
+    app.kubernetes.io/name: openbao-config-operator
+  name: openbao-config-operator-leader-election-role
+  namespace: openbao-config-operator-system
 rules:
 - apiGroups:
   - ""
@@ -60,23 +3570,47 @@ rules:
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRole
 metadata:
-  name: mto-extension-openbao-manager-role
+  name: openbao-config-operator-manager-role
 rules:
 - apiGroups:
   - ""
   resources:
+  - configmaps
   - secrets
   verbs:
-  - get
-  - list
-  - watch
-- apiGroups:
-  - security.mto.stakater.com
-  resources:
-  - openbaoextensions
-  verbs:
   - create
-  - delete
+  - get
+  - list
+  - update
+  - watch
+- apiGroups:
+  - ""
+  resources:
+  - namespaces
+  verbs:
+  - get
+  - list
+  - watch
+- apiGroups:
+  - security.mto.stakater.com
+  resources:
+  - openbaoauthmethods
+  - openbaocertauthengineconfigs
+  - openbaocertauthengineroles
+  - openbaogroupaliases
+  - openbaogroups
+  - openbaoidentitytokenroles
+  - openbaojwtoidcauthengineconfigs
+  - openbaojwtoidcauthengineroles
+  - openbaokubernetesauthengineconfigs
+  - openbaokubernetesauthroles
+  - openbaonamespaces
+  - openbaopkisecretengineconfigs
+  - openbaopkisecretengineroles
+  - openbaopolicies
+  - openbaosecretengines
+  - openbaotransitkeys
+  verbs:
   - get
   - list
   - patch
@@ -85,36 +3619,52 @@ rules:
 - apiGroups:
   - security.mto.stakater.com
   resources:
-  - openbaoextensions/finalizers
+  - openbaoauthmethods/finalizers
+  - openbaocertauthengineconfigs/finalizers
+  - openbaocertauthengineroles/finalizers
+  - openbaogroupaliases/finalizers
+  - openbaogroups/finalizers
+  - openbaoidentitytokenroles/finalizers
+  - openbaojwtoidcauthengineconfigs/finalizers
+  - openbaojwtoidcauthengineroles/finalizers
+  - openbaokubernetesauthengineconfigs/finalizers
+  - openbaokubernetesauthroles/finalizers
+  - openbaonamespaces/finalizers
+  - openbaopkisecretengineconfigs/finalizers
+  - openbaopkisecretengineroles/finalizers
+  - openbaopolicies/finalizers
+  - openbaosecretengines/finalizers
+  - openbaotransitkeys/finalizers
   verbs:
   - update
 - apiGroups:
   - security.mto.stakater.com
   resources:
-  - openbaoextensions/status
+  - openbaoauthmethods/status
+  - openbaocertauthengineconfigs/status
+  - openbaocertauthengineroles/status
+  - openbaogroupaliases/status
+  - openbaogroups/status
+  - openbaoidentitytokenroles/status
+  - openbaojwtoidcauthengineconfigs/status
+  - openbaojwtoidcauthengineroles/status
+  - openbaokubernetesauthengineconfigs/status
+  - openbaokubernetesauthroles/status
+  - openbaonamespaces/status
+  - openbaopkisecretengineconfigs/status
+  - openbaopkisecretengineroles/status
+  - openbaopolicies/status
+  - openbaosecretengines/status
+  - openbaotransitkeys/status
   verbs:
   - get
   - patch
   - update
-- apiGroups:
-  - tenantoperator.stakater.com
-  resources:
-  - tenants
-  verbs:
-  - get
-  - list
-  - watch
-- apiGroups:
-  - tenantoperator.stakater.com
-  resources:
-  - tenants/status
-  verbs:
-  - get
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRole
 metadata:
-  name: mto-extension-openbao-metrics-auth-role
+  name: openbao-config-operator-metrics-auth-role
 rules:
 - apiGroups:
   - authentication.k8s.io
@@ -132,7 +3682,7 @@ rules:
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRole
 metadata:
-  name: mto-extension-openbao-metrics-reader
+  name: openbao-config-operator-metrics-reader
 rules:
 - nonResourceURLs:
   - /metrics
@@ -144,56 +3694,64 @@ kind: RoleBinding
 metadata:
   labels:
     app.kubernetes.io/managed-by: kustomize
-    app.kubernetes.io/name: mto-extension-openbao
-  name: mto-extension-openbao-leader-election-rolebinding
-  namespace: mto-extension-openbao-system
+    app.kubernetes.io/name: openbao-config-operator
+  name: openbao-config-operator-leader-election-rolebinding
+  namespace: openbao-config-operator-system
 roleRef:
   apiGroup: rbac.authorization.k8s.io
   kind: Role
-  name: mto-extension-openbao-leader-election-role
+  name: openbao-config-operator-leader-election-role
 subjects:
 - kind: ServiceAccount
-  name: mto-extension-openbao-controller-manager
-  namespace: mto-extension-openbao-system
+  name: openbao-config-operator-controller-manager
+  namespace: openbao-config-operator-system
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRoleBinding
 metadata:
   labels:
     app.kubernetes.io/managed-by: kustomize
-    app.kubernetes.io/name: mto-extension-openbao
-  name: mto-extension-openbao-manager-rolebinding
+    app.kubernetes.io/name: openbao-config-operator
+  name: openbao-config-operator-manager-rolebinding
 roleRef:
   apiGroup: rbac.authorization.k8s.io
   kind: ClusterRole
-  name: mto-extension-openbao-manager-role
+  name: openbao-config-operator-manager-role
 subjects:
 - kind: ServiceAccount
-  name: mto-extension-openbao-controller-manager
-  namespace: mto-extension-openbao-system
+  name: openbao-config-operator-controller-manager
+  namespace: openbao-config-operator-system
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRoleBinding
 metadata:
-  name: mto-extension-openbao-metrics-auth-rolebinding
+  name: openbao-config-operator-metrics-auth-rolebinding
 roleRef:
   apiGroup: rbac.authorization.k8s.io
   kind: ClusterRole
-  name: mto-extension-openbao-metrics-auth-role
+  name: openbao-config-operator-metrics-auth-role
 subjects:
 - kind: ServiceAccount
-  name: mto-extension-openbao-controller-manager
-  namespace: mto-extension-openbao-system
+  name: openbao-config-operator-controller-manager
+  namespace: openbao-config-operator-system
+---
+apiVersion: v1
+data:
+  VAULT_ADDR: http://openbao.openbao.svc.cluster.local:8200
+kind: ConfigMap
+metadata:
+  name: openbao-config-operator-controller-manager-config-c22hgd88dg
+  namespace: openbao-config-operator-system
 ---
 apiVersion: v1
 kind: Service
 metadata:
   labels:
     app.kubernetes.io/managed-by: kustomize
-    app.kubernetes.io/name: mto-extension-openbao
+    app.kubernetes.io/name: openbao-config-operator
     control-plane: controller-manager
-  name: mto-extension-openbao-controller-manager-metrics-service
-  namespace: mto-extension-openbao-system
+  name: openbao-config-operator-metrics-service
+  namespace: openbao-config-operator-system
 spec:
   ports:
   - name: https
@@ -208,10 +3766,10 @@ kind: Deployment
 metadata:
   labels:
     app.kubernetes.io/managed-by: kustomize
-    app.kubernetes.io/name: mto-extension-openbao
+    app.kubernetes.io/name: openbao-config-operator
     control-plane: controller-manager
-  name: mto-extension-openbao-controller-manager
-  namespace: mto-extension-openbao-system
+  name: openbao-config-operator-controller-manager
+  namespace: openbao-config-operator-system
 spec:
   replicas: 1
   selector:
@@ -231,7 +3789,18 @@ spec:
         - --health-probe-bind-address=:8081
         command:
         - /manager
-        image: ghcr.io/stakater/mto-extension-openbao:v0.0.1
+        env:
+        - name: BAO_AUTH_METHOD
+          value: kubernetes
+        - name: BAO_AUTH_JWT_PATH
+          value: /var/run/secrets/openbao/token
+        - name: VAULT_ADDR
+          valueFrom:
+            configMapKeyRef:
+              key: VAULT_ADDR
+              name: openbao-config-operator-controller-manager-config-c22hgd88dg
+        image: ghcr.io/stakater/openbao-config-operator:v0.0.1
+        imagePullPolicy: IfNotPresent
         livenessProbe:
           httpGet:
             path: /healthz
@@ -257,9 +3826,21 @@ spec:
           capabilities:
             drop:
             - ALL
+        volumeMounts:
+        - mountPath: /var/run/secrets/openbao
+          name: bao-sa-token
+          readOnly: true
       imagePullSecrets:
       - name: saap-dockerconfigjson
       securityContext:
         runAsNonRoot: true
-      serviceAccountName: mto-extension-openbao-controller-manager
+      serviceAccountName: openbao-config-operator-controller-manager
       terminationGracePeriodSeconds: 10
+      volumes:
+      - name: bao-sa-token
+        projected:
+          sources:
+          - serviceAccountToken:
+              audience: openbao
+              expirationSeconds: 3600
+              path: token

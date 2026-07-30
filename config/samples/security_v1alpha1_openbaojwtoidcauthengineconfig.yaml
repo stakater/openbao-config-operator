@@ -10,7 +10,7 @@ apiVersion: security.mto.stakater.com/v1alpha1
 kind: OpenBaoJWTOIDCAuthEngineConfig
 metadata:
   name: tenant-oidc
-  namespace: mto-extension-openbao-system
+  namespace: openbao-config-operator-system
 spec:
   path: oidc
   oidcDiscoveryUrl: https://accounts.example.com

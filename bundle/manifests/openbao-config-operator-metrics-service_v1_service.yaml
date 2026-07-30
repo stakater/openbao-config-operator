@@ -4,9 +4,9 @@ metadata:
   creationTimestamp: null
   labels:
     app.kubernetes.io/managed-by: kustomize
-    app.kubernetes.io/name: mto-extension-openbao
+    app.kubernetes.io/name: openbao-config-operator
     control-plane: controller-manager
-  name: mto-extension-openbao-controller-manager-metrics-service
+  name: openbao-config-operator-metrics-service
 spec:
   ports:
   - name: https

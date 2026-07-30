@@ -2,7 +2,7 @@ apiVersion: security.mto.stakater.com/v1alpha1
 kind: OpenBaoKubernetesAuthRole
 metadata:
   name: prod-deployers
-  namespace: mto-extension-openbao-system
+  namespace: openbao-config-operator-system
 spec:
   # Auth mount path; bao writes to auth/<path>/role/<metadata.name>.
   path: kubernetes

@@ -431,8 +431,7 @@ func TestOpenBaoPolicy_AccessorTemplating_RejectedAsInvalidNoRequeue(t *testing.
 	reconcile(t, r, p.Name)
 	res := reconcile(t, r, p.Name)
 
-	require.Zero(t, res.RequeueAfter, "Invalid spec should not requeue (user must fix spec)")
-	require.False(t, res.Requeue)
+	require.True(t, res.IsZero(), "Invalid spec should not requeue (user must fix spec)")
 	require.Equal(t, 0, fb.upserts, "no bao write should happen when spec is invalid")
 	cond := readyCond(t, getPolicy(t, r, p.Name))
 	require.NotNil(t, cond)

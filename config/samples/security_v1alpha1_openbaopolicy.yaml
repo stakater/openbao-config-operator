@@ -2,7 +2,7 @@ apiVersion: security.mto.stakater.com/v1alpha1
 kind: OpenBaoPolicy
 metadata:
   name: secret-reader
-  namespace: mto-extension-openbao-system
+  namespace: openbao-config-operator-system
 spec:
   # spec.name defaults to metadata.name; set it if the bao-side policy name
   # must differ from the Kubernetes resource name.

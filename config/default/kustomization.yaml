@@ -1,12 +1,12 @@
 # Adds namespace to all resources.
-namespace: mto-extension-openbao-system
+namespace: openbao-config-operator-system
 
 # Value of this field is prepended to the
 # names of all resources, e.g. a deployment named
 # "wordpress" becomes "alices-wordpress".
 # Note that it should also match with the prefix (text before '-') of the namespace
 # field above.
-namePrefix: mto-extension-openbao-
+namePrefix: openbao-config-operator-
 
 # Labels to add to all resources and selectors.
 #labels:
@@ -18,7 +18,8 @@ resources:
 - ../crd
 - ../rbac
 - ../manager
-- ../samples
+# ../samples is deliberately not included: sample CRs are examples, not part of an
+# install. config/manifests pulls them in separately for the CSV's alm-examples.
 # [WEBHOOK] To enable webhook, uncomment all the sections with [WEBHOOK] prefix including the one in
 # crd/kustomization.yaml
 #- ../webhook

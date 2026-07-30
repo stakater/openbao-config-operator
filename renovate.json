@@ -2,5 +2,13 @@
   "$schema": "https://docs.renovatebot.com/renovate-schema.json",
   "extends": [
     "local>stakater-ab/.github:renovate-config"
+  ],
+  "packageRules": [
+    {
+      "matchFileNames": [
+        "config/manager/kustomization.yaml"
+      ],
+      "enabled": false
+    }
   ]
 }

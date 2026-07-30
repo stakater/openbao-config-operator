@@ -252,7 +252,7 @@ func baoAuthMethod() string {
 //     across multiple operator installs).
 //  2. OPERATOR_NS — convention used elsewhere in this binary; downward-
 //     API-injected by the kustomize Deployment.
-//  3. "mto-extension-openbao-system" — last-ditch literal default for
+//  3. "openbao-config-operator-system" — last-ditch literal default for
 //     `make run` and tests where neither env var is set.
 //
 // Uses a non-cached direct client because the manager's cache isn't
@@ -267,7 +267,7 @@ func bootstrapHMACComputer(mgr ctrl.Manager) (hmacstore.Computer, error) {
 		namespace = os.Getenv("OPERATOR_NS")
 	}
 	if namespace == "" {
-		namespace = "mto-extension-openbao-system"
+		namespace = "openbao-config-operator-system"
 	}
 	directClient, err := client.New(mgr.GetConfig(), client.Options{Scheme: mgr.GetScheme()})
 	if err != nil {
