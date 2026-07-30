@@ -1,0 +1,60 @@
+name: Pull Request Operator
+
+# Controller image, OLM bundle and catalog. Ignores the two hand-maintained
+# charts: they ship no CRDs and name no image, so a change to either cannot
+# alter what this workflow builds. config/ is deliberately not ignored — it
+# feeds both the bundle and the helmified operator chart.
+on:
+  pull_request:
+    branches:
+      - main
+      - release
+    paths-ignore:
+      - '**/*.md'
+      - 'docs/**'
+      - 'examples/**'
+      - 'demo/**'
+      - 'charts/openbao-config-mto/**'
+      - 'charts/openbao-config-mto-bootstrap/**'
+
+jobs:
+  # The tenant chart emits OpenBao* CRs against CRDs this repo owns but does
+  # not ship in that chart, so a schema change here can invalidate the chart
+  # with no chart file touched. Regenerates the CRDs first: a pull request that
+  # edits api/ without running `make manifests` would otherwise be validated
+  # against stale committed CRDs.
+  crd-compat:
+    name: CRD Compatibility
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Go
+        uses: actions/setup-go@v6
+        with:
+          go-version: "1.26"
+
+      - name: Configure private repo
+        run: |
+          git config --global url."https://${{ secrets.STAKATER_AB_REPOS }}:x-oauth-basic@github.com/stakater-ab".insteadOf "https://github.com/stakater-ab"
+
+      - name: Create kind cluster
+        uses: helm/kind-action@v1
+
+      - name: Validate rendered CRs against CRDs
+        run: make manifests helm-crd-compat
+
+  operator-pull-request:
+    name: Operator Pull Request
+    uses: stakater/.github/.github/workflows/operator_pull_request.yaml@main
+    secrets:
+      CONTAINER_REGISTRY_URL: ghcr.io/stakater
+      CONTAINER_REGISTRY_USERNAME: stakater-user
+      CONTAINER_REGISTRY_PASSWORD: ${{ secrets.GHCR_TOKEN }}
+      SLACK_WEBHOOK_URL: ${{ secrets.STAKATER_DELIVERY_SLACK_WEBHOOK }}
+      STAKATER_AB_REPOS: ${{ secrets.STAKATER_AB_REPOS }}
+    with:
+      ENABLE_LINTING: true
+      ENABLE_UNIT_TESTS: true
+      ENABLE_STAKATER_AB_GIT_AUTH: true
+      GO_VERSION: "1.26"

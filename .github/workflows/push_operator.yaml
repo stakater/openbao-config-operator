@@ -1,14 +1,21 @@
-name: Push
+name: Push Operator
 
+# Controller image, OLM bundle, catalog, and the operator chart — which is
+# helmified from config/default with the image tag this run builds, so it
+# releases with the image and only with the image. The two hand-maintained
+# charts publish from push_charts.yaml on their own versions.
 on:
   push:
     branches:
       - main
     paths-ignore:
-      - '*.md'
-      - 'docs/'
-      - 'examples/'
-      - 'hack/'
+      - '**/*.md'
+      - 'docs/**'
+      - 'examples/**'
+      - 'demo/**'
+      - 'hack/**'
+      - 'charts/openbao-config-mto/**'
+      - 'charts/openbao-config-mto-bootstrap/**'
 
 jobs:
   push-operator:
@@ -25,5 +32,6 @@ jobs:
       ENABLE_LINTING: true
       ENABLE_UNIT_TESTS: true
       ENABLE_STAKATER_AB_GIT_AUTH: true
+      # Resolves to `make helm-release`, which is the operator chart alone.
       ENABLE_CHART_PUSH: true
       GO_VERSION: "1.26"

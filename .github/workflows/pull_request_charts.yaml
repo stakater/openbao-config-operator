@@ -1,0 +1,54 @@
+name: Pull Request Charts
+
+# The two hand-maintained charts. Split from the operator workflow because
+# neither ships a CRD nor names an image, so a change to one has no bearing on
+# the controller image, its bundle, or its catalog. No Go build here, so no
+# private-module auth is needed either.
+on:
+  pull_request:
+    branches:
+      - main
+      - release
+    paths:
+      - 'charts/openbao-config-mto/**'
+      - 'charts/openbao-config-mto-bootstrap/**'
+      # 'hack/' holds the chart render tests and their golden fixtures.
+      - 'hack/**'
+      - 'Makefile'
+      - 'makefiles/**'
+      - '.github/workflows/**'
+
+jobs:
+  chart-tests:
+    name: Chart Tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # The version guard diffs the charts against the base branch.
+          fetch-depth: 0
+
+      - name: Lint charts and run render tests
+        run: make helm-lint helm-render-test
+
+      - name: Check chart versions
+        run: make helm-version-guard CHART_GUARD_BASE_REF=origin/${{ github.base_ref }}
+
+  crd-compat:
+    name: CRD Compatibility
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Go
+        uses: actions/setup-go@v6
+        with:
+          go-version: "1.26"
+
+      - name: Create kind cluster
+        uses: helm/kind-action@v1
+
+      # Against the committed CRDs — this path does not regenerate them, since
+      # nothing under api/ is in its trigger set.
+      - name: Validate rendered CRs against CRDs
+        run: make helm-crd-compat

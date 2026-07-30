@@ -1,0 +1,43 @@
+name: Push Charts
+
+# Publishes openbao-config-mto and openbao-config-mto-bootstrap at the versions
+# in their own Chart.yaml. No image is built and no git tag is created, so a
+# chart-only commit leaves the operator's release stream untouched. A commit
+# that changes both charts and code triggers this and push_operator.yaml in parallel;
+# they publish disjoint OCI names, so there is no ordering between them.
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - 'charts/openbao-config-mto/**'
+      - 'charts/openbao-config-mto-bootstrap/**'
+
+jobs:
+  push-charts:
+    name: Push Charts
+    if: "! contains(toJSON(github.event.commits.*.message), '[skip-ci]')"
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Helm
+        uses: azure/setup-helm@v4
+
+      - name: Lint charts and run render tests
+        run: make helm-lint helm-render-test
+
+      - name: Check the bootstrap's tenant chart pin
+        run: make helm-pin-guard
+
+      - name: Log in to the chart registry
+        run: |
+          echo "${{ secrets.GHCR_TOKEN }}" \
+            | helm registry login ghcr.io -u stakater-user --password-stdin
+
+      # Backstop for anything that reached main without the pull request guard.
+      - name: Refuse to overwrite a published version
+        run: make helm-unpublished-guard
+
+      - name: Publish charts
+        run: make helm-release-mto-bootstrap helm-release-mto

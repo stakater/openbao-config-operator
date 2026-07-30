@@ -486,8 +486,22 @@ HELM_MK_ARGS = \
 	HELMIFY_POSTPROCESS=$(HELMIFY_POSTPROCESS) \
 	IMG=$(IMG)
 
+# The hand-maintained charts version themselves in their own Chart.yaml rather
+# than tracking $(CHART_VERSION). They ship no CRDs and name no image, so an
+# operator release does not change their content, and openbao-config-mto-bootstrap
+# pins the openbao-config-mto version it pulls at render time — a pin an author
+# writes in the same commit, which only resolves if the published tag is the one
+# in Chart.yaml. Override either to publish a one-off build elsewhere.
+MTO_BOOTSTRAP_CHART_VERSION ?= $(shell awk '/^version:/ { print $$2; exit }' $(MTO_BOOTSTRAP_CHART_DIR)/Chart.yaml)
+MTO_CHART_VERSION           ?= $(shell awk '/^version:/ { print $$2; exit }' $(MTO_CHART_DIR)/Chart.yaml)
+
+# The name the shared chart-push CI action invokes. That action runs on the
+# code path only, where the operator chart is the sole chart whose content moved.
 .PHONY: helm-release
-helm-release: helm-release-operator helm-release-mto-bootstrap helm-release-mto ## Release operator + mto-bootstrap + mto charts to OCI.
+helm-release: helm-release-operator ## Release the operator chart to OCI (invoked by shared CI).
+
+.PHONY: helm-release-all
+helm-release-all: helm-release-operator helm-release-mto-bootstrap helm-release-mto ## Release all three charts to OCI.
 
 .PHONY: helm-release-operator
 helm-release-operator: helmify kustomize yq download-helm-mk ## Helmify config/default and release the operator chart.
@@ -497,15 +511,15 @@ helm-release-operator: helmify kustomize yq download-helm-mk ## Helmify config/d
 helm-release-mto-bootstrap: helm ## Lint, package and push openbao-config-mto-bootstrap.
 	$(HELM) lint $(MTO_BOOTSTRAP_CHART_DIR) --strict
 	@mkdir -p dist
-	$(HELM) package $(MTO_BOOTSTRAP_CHART_DIR) -d dist --version $(CHART_VERSION)
-	$(HELM) push dist/openbao-config-mto-bootstrap-$(CHART_VERSION).tgz oci://$(HELM_REGISTRY)
+	$(HELM) package $(MTO_BOOTSTRAP_CHART_DIR) -d dist --version $(MTO_BOOTSTRAP_CHART_VERSION)
+	$(HELM) push dist/openbao-config-mto-bootstrap-$(MTO_BOOTSTRAP_CHART_VERSION).tgz oci://$(HELM_REGISTRY)
 
 .PHONY: helm-release-mto
 helm-release-mto: helm ## Lint, package and push openbao-config-mto (per-Tenant chart pulled by t-op-v2).
 	$(HELM) lint $(MTO_CHART_DIR) --strict --set tenant=lint-only
 	@mkdir -p dist
-	$(HELM) package $(MTO_CHART_DIR) -d dist --version $(CHART_VERSION)
-	$(HELM) push dist/openbao-config-mto-$(CHART_VERSION).tgz oci://$(HELM_REGISTRY)
+	$(HELM) package $(MTO_CHART_DIR) -d dist --version $(MTO_CHART_VERSION)
+	$(HELM) push dist/openbao-config-mto-$(MTO_CHART_VERSION).tgz oci://$(HELM_REGISTRY)
 
 .PHONY: helm-lint
 helm-lint: helm ## Lint the two hand-maintained charts (operator chart is auto-generated).
@@ -515,6 +529,39 @@ helm-lint: helm ## Lint the two hand-maintained charts (operator chart is auto-g
 .PHONY: helm-render-test
 helm-render-test: helm yq ## Verify the tenant chart's component slices (golden, disjoint, union, purity).
 	HELM=$(HELM) YQ=$(YQ_BIN) hack/chart-render-tests.sh
+
+# Base to diff the hand-maintained charts against when checking for a version
+# bump. CI passes the pull request's base branch.
+CHART_GUARD_BASE_REF ?= origin/main
+
+.PHONY: helm-version-guard
+helm-version-guard: yq ## Verify a changed hand-maintained chart was version-bumped and the bootstrap pin matches.
+	YQ=$(YQ_BIN) BASE_REF=$(CHART_GUARD_BASE_REF) hack/chart-version-guard.sh all
+
+.PHONY: helm-pin-guard
+helm-pin-guard: yq ## Verify the bootstrap's openbaoConfigMto pin matches the mto chart's Chart.yaml.
+	YQ=$(YQ_BIN) hack/chart-version-guard.sh pin
+
+.PHONY: helm-unpublished-guard
+helm-unpublished-guard: helm ## Fail if either hand-maintained chart's Chart.yaml version is already in the registry.
+	@for entry in "openbao-config-mto-bootstrap $(MTO_BOOTSTRAP_CHART_VERSION)" "openbao-config-mto $(MTO_CHART_VERSION)"; do \
+		set -- $$entry; \
+		if out=$$($(HELM) show chart oci://$(HELM_REGISTRY)/$$1 --version $$2 2>&1); then \
+			echo "FAIL  unpublished:$$1 — $$2 already exists at oci://$(HELM_REGISTRY)/$$1. Bump version in charts/$$1/Chart.yaml."; \
+			exit 1; \
+		fi; \
+		case "$$out" in \
+			*"not found"*|*"NAME_UNKNOWN"*|*"manifest unknown"*|*"MANIFEST_UNKNOWN"*) \
+				echo "PASS  unpublished:$$1 ($$2)" ;; \
+			*) \
+				echo "FAIL  unpublished:$$1 — could not determine whether $$2 exists: $$out"; \
+				exit 1 ;; \
+		esac; \
+	done
+
+.PHONY: helm-crd-compat
+helm-crd-compat: kustomize helm yq ## Server-dry-run the tenant chart's OpenBao CRs against config/crd. Needs a reachable cluster.
+	KUSTOMIZE=$(KUSTOMIZE) HELM=$(HELM) YQ=$(YQ_BIN) KUBECTL=$(KUBECTL) hack/chart-crd-compat.sh
 
 # go-install-tool will 'go install' any package with custom target and name of binary, if it doesn't exist
 # $1 - target path with name of binary
