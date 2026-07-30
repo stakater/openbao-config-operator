@@ -12,6 +12,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	ctrl "sigs.k8s.io/controller-runtime"
+	"sigs.k8s.io/controller-runtime/pkg/builder"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 	"sigs.k8s.io/controller-runtime/pkg/predicate"
@@ -827,9 +828,18 @@ func checkCABundleConfigMapCollision(ctx context.Context, cl client.Client, p *v
 // converges via the base's ErrorBackoff requeue while awaiting; the CSR Secret
 // is owner-ref'd to the CR so it is garbage-collected on delete without a
 // Secret watch.
+//
+// The predicate is scoped to the CR rather than applied with WithEventFilter,
+// because a published CA-bundle ConfigMap is watched too and ConfigMaps do not
+// carry a generation. A cluster-wide filter would drop every ConfigMap event
+// and leave tampering to be corrected only by the periodic requeue — a window
+// in which an injected key is a live trust anchor for every consumer of the
+// bundle. The publisher takes a controller reference on that ConfigMap, so
+// Owns maps the event back to the owning CR.
 func (r *OpenBaoPKISecretEngineConfigReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewControllerManagedBy(mgr).
-		For(&v1alpha1.OpenBaoPKISecretEngineConfig{}).
-		WithEventFilter(predicate.GenerationChangedPredicate{}).
+		For(&v1alpha1.OpenBaoPKISecretEngineConfig{},
+			builder.WithPredicates(predicate.GenerationChangedPredicate{})).
+		Owns(&corev1.ConfigMap{}).
 		Complete(r)
 }

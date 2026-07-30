@@ -65,6 +65,14 @@ spec:
           - --health-probe-bind-address=:8081
         
         env:
+          # The namespace the operator runs in. Read by the binary to place
+          # cluster-singleton objects it owns, currently the HMAC key Secret.
+          # Without it the binary falls back to a compiled-in literal and dies
+          # at setup on any install whose namespace differs from that literal.
+          - name: OPERATOR_NS
+            valueFrom:
+              fieldRef:
+                fieldPath: metadata.namespace
           # The operator holds no bao credential: it logs in at
           # auth/k8s-operator/login with the projected ServiceAccount token
           # below (see hack/e2e/openbao/bootstrap_operator_auth.sh for the
