@@ -35,13 +35,18 @@ func TestTransitKey_BaoName_PrefersSpecNameAndLowerTrims(t *testing.T) {
 	})
 }
 
-// IsDeletable returns true unconditionally — bao's own deletion_allowed
-// flag is the canonical gate. The controller's BaoDelete translates bao's
-// 400 into ErrDeleteBlocked when the gate is closed.
-func TestTransitKey_IsDeletable_IsTrue(t *testing.T) {
+// IsDeletable returns false unconditionally: a transit key holds the only
+// material that decrypts its ciphertext, so CR deletion orphans the bao
+// key instead of destroying it. spec.deletionAllowed configures bao's own
+// gate and must not change this answer.
+func TestTransitKey_IsDeletable_IsFalse(t *testing.T) {
 	t.Parallel()
 	k := &OpenBaoTransitKey{}
-	require.True(t, k.IsDeletable())
+	require.False(t, k.IsDeletable())
+
+	k.Spec.DeletionAllowed = ptrBool(true)
+	require.False(t, k.IsDeletable(),
+		"spec.deletionAllowed is a bao-side flag, not an instruction to delete the key")
 }
 
 func TestTransitKey_GetPath_IncludesMountAndName(t *testing.T) {

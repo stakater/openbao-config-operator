@@ -14,6 +14,19 @@
 // spec.path; the mount must exist before this CR's first reconcile
 // succeeds. Ordering is reconcile-driven — without the mount, bao 400s
 // the create call and the controller retries.
+//
+// IsDeletable returns false: deleting the CR must not remove the bao key.
+// A transit key is the only copy of the material that decrypts every
+// ciphertext ever produced under it, and bao has no undo. The CR is
+// derived state — it disappears whenever its source stops rendering it,
+// including for reasons that are not a decision to destroy anything
+// (an opt-in annotation removed, a values typo, a namespace reaped) — so
+// tying key destruction to CR deletion makes routine churn unrecoverable.
+// The shared base therefore releases the finalizer without touching bao
+// and skips rename-cleanup, and the bao key outlives the CR. Re-creating
+// a CR at the same (openbaoNamespace, mount, name) adopts the existing
+// key, which makes an accidental removal a no-op rather than data loss.
+// Destroying a key is a deliberate act performed against bao directly.
 package v1alpha1
 
 import (
@@ -71,13 +84,9 @@ func (k *OpenBaoTransitKey) GetPayload() map[string]interface{} {
 
 func (k *OpenBaoTransitKey) IsInitialized() bool { return true }
 
-// IsDeletable returns true unconditionally. Bao's deletion_allowed flag
-// is the canonical gate (per the transit API design — there is no
-// CR-level safety knob that adds value over the bao field). The
-// controller's BaoDelete translates bao's 400 into ErrDeleteBlocked, so
-// CR deletion stays in Terminating until the user flips
-// spec.deletionAllowed=true and the next reconcile re-runs the delete.
-func (k *OpenBaoTransitKey) IsDeletable() bool { return true }
+// IsDeletable returns false: see the package comment. CR deletion
+// releases the finalizer and leaves the bao key in place.
+func (k *OpenBaoTransitKey) IsDeletable() bool { return false }
 
 func (k *OpenBaoTransitKey) PrepareInternalValues(ctx context.Context, object client.Object) error {
 	return nil
@@ -366,10 +375,12 @@ type OpenBaoTransitKeySpec struct {
 	// +kubebuilder:validation:Pattern:=`^(0|[0-9]+(s|m|h))+$`
 	AutoRotatePeriod string `json:"autoRotatePeriod,omitempty"`
 
-	// DeletionAllowed gates DELETE transit/keys/<name> on the bao side.
-	// CR deletion when this is unset or false surfaces Ready=False
-	// reason=DeleteBlocked; the user flips it true and the next
-	// reconcile completes the delete.
+	// DeletionAllowed sets the bao-side deletion_allowed flag on the key,
+	// which gates DELETE transit/keys/<name> for callers of the bao API.
+	// It does not make CR deletion remove the key: this kind never
+	// deletes its bao object (see the package comment). Leave it unset to
+	// keep bao refusing DELETE on the key; set it true to permit an
+	// operator-independent teardown of the key against bao directly.
 	// +kubebuilder:validation:Optional
 	DeletionAllowed *bool `json:"deletionAllowed,omitempty"`
 

@@ -23,9 +23,9 @@ const (
 	// into checking the bao server when the fault is in our preparation step.
 	ReasonInternalError = "InternalError"
 	// ReasonDeleteBlocked covers the case where bao refuses a delete because
-	// a server-side flag forbids it (e.g. transit's deletion_allowed=false).
-	// Surfaced as its own reason so dashboards distinguish "user must flip a
-	// gate" from a generic BaoError or a controller-side bug.
+	// a server-side flag forbids it. Surfaced as its own reason so dashboards
+	// distinguish "a gate on the bao object must be flipped" from a generic
+	// BaoError or a controller-side bug.
 	ReasonDeleteBlocked = "DeleteBlocked"
 	// ReasonAwaitingExternalSignature covers an intermediate-CA config that has
 	// generated and exported its CSR and is waiting for the externally-signed
@@ -60,11 +60,12 @@ var ErrInternal = errors.New("controller internal error")
 var ErrInvalidSpec = errors.New("invalid spec")
 
 // ErrDeleteBlocked marks a delete that bao refused because of a server-side
-// flag (e.g. transit's deletion_allowed=false). Wrap with
-// fmt.Errorf("%w: ...", ErrDeleteBlocked, ...) so ClassifyErr produces
-// ReasonDeleteBlocked. The base's handleDelete keeps the finalizer in
-// place when BaoDelete returns this, so the CR stays Terminating until the
-// user flips the gate.
+// flag on the object. Wrap with fmt.Errorf("%w: ...", ErrDeleteBlocked, ...)
+// so ClassifyErr produces ReasonDeleteBlocked. The base's handleDelete keeps
+// the finalizer in place when BaoDelete returns this, so the CR stays
+// Terminating until the gate is flipped — a primitive whose bao object must
+// outlive its CR should return IsDeletable=false instead of this, because a
+// gate the operator cannot reach on the delete path never clears.
 var ErrDeleteBlocked = errors.New("bao delete blocked")
 
 // ErrAwaitingExternalSignature is returned by a primitive's BaoWrite when it

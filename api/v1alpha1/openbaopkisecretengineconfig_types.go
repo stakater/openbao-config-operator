@@ -96,9 +96,11 @@ func (d *OpenBaoPKISecretEngineConfig) GetPayload() map[string]interface{} {
 // IsEquivalentToDesiredState compares the bao-side read against the CR's spec.
 // Once a CA is active, the only mutable surfaces are the URL config and — when
 // spec.publishCABundleConfigMap is set — whether the published CA-bundle
-// ConfigMap matches the active CA cert. The CA cert itself is locked because
-// regenerating it would destroy the private key. URL comparison is
-// order-insensitive because bao stores the lists as sets.
+// ConfigMap matches the active CA cert. The CA cert itself is locked: this type
+// addresses a mount's CA without naming an issuer, so it has no way to describe
+// a second one, and regenerating would add an issuer it could neither reach nor
+// remove. URL comparison is order-insensitive because bao stores the lists as
+// sets.
 func (d *OpenBaoPKISecretEngineConfig) IsEquivalentToDesiredState(payload map[string]interface{}) bool {
 	caExists, _ := payload["caExists"].(bool)
 	if !caExists {

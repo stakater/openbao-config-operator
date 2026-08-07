@@ -144,10 +144,11 @@ spec:
       version: v1alpha1
     - description: A single transit key at <mount>/keys/<name> on a pre-existing transit
         secret-engine mount. Type, derived, convergent_encryption, and key_size are
-        immutable post-create; mutation surfaces Ready=False reason=Invalid. Bao's
-        deletion_allowed flag gates DELETE — when unset/false, CR delete leaves the
-        CR in Terminating with Ready=False reason=DeleteBlocked until the user flips
-        spec.deletionAllowed=true.
+        immutable post-create; mutation surfaces Ready=False reason=Invalid. Deleting
+        the CR does NOT delete the bao key. A transit key is the only copy of the
+        material that decrypts everything encrypted under it, so the finalizer is
+        released and the key is left in place; destroying one is done against bao
+        directly.
       displayName: OpenBao Transit Key
       kind: OpenBaoTransitKey
       name: openbaotransitkeys.security.mto.stakater.com

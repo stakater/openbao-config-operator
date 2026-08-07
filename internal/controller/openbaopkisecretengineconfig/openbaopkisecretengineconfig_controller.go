@@ -72,11 +72,18 @@ func NewOpenBaoPKISecretEngineConfigReconcilerWithClient(mgr ctrl.Manager, bao b
 // OpenBaoPKISecretEngineConfigHandlers builds the bao-I/O callbacks.
 //
 // BaoGet probes for an existing CA and reads URL config in one payload. The
-// boolean caExists is the BaoWrite gate: a present CA must NEVER be regenerated
-// (would destroy the private key), so BaoWrite only generates/signs when no CA
-// is present. This holds for both type=root and type=intermediate — an
-// intermediate's CA only appears after set-signed, so until then ReadPKICA
-// returns ErrNotFound and the create/sign path keeps running.
+// boolean caExists is the BaoWrite gate: a present CA is never regenerated, so
+// BaoWrite only generates/signs when no CA is present. This holds for both
+// type=root and type=intermediate — an intermediate's CA only appears after
+// set-signed, so until then ReadPKICA returns ErrNotFound and the create/sign
+// path keeps running.
+//
+// The gate does not protect key material. bao's PKI engine holds several
+// issuers per mount, so a second generate adds an issuer instead of replacing
+// the first, and it does not move the mount's default — the CA this CR reports
+// and publishes is unaffected. What the gate prevents is accumulating extra
+// issuers that nothing here can name, address or clean up, since the generate
+// call sends no issuer_name and the response's issuer identity is discarded.
 func OpenBaoPKISecretEngineConfigHandlers(cl client.Client, scheme *runtime.Scheme, bao baoclient.Client) resource.Handlers[*v1alpha1.OpenBaoPKISecretEngineConfig] {
 	return resource.Handlers[*v1alpha1.OpenBaoPKISecretEngineConfig]{
 		NewInstance: func() *v1alpha1.OpenBaoPKISecretEngineConfig {
@@ -142,9 +149,10 @@ func OpenBaoPKISecretEngineConfigHandlers(cl client.Client, scheme *runtime.Sche
 			ns := baoclient.WithNamespace(p.OpenBaoNamespace())
 
 			// Re-probe inside BaoWrite so a concurrent reconcile that raced
-			// past us doesn't get its CA overwritten. A present CA is final
-			// for both root and intermediate — regenerating destroys the
-			// private key.
+			// past us does not generate a second time. A present CA is final
+			// for both root and intermediate: the racing call would not
+			// replace it, but it would leave an extra unnamed issuer in the
+			// mount that nothing here can address.
 			existing, err := bao.ReadPKICA(ctx, p.Spec.Path, ns)
 			switch {
 			case err == nil && existing != nil:

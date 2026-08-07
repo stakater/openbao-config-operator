@@ -2,7 +2,6 @@ package e2e
 
 import (
 	"context"
-	"errors"
 	"time"
 
 	. "github.com/onsi/ginkgo/v2"
@@ -86,18 +85,20 @@ var _ = Describe("OpenBaoTransitKey CR → OpenBao", Ordered, func() {
 		}).WithTimeout(60 * time.Second).WithPolling(2 * time.Second).Should(Succeed())
 	})
 
-	It("deletes the transit key when the CR is deleted", func(ctx SpecContext) {
+	// Deleting the CR must release the finalizer without touching the bao
+	// key. The key holds the only material that decrypts anything encrypted
+	// under it, so it outlives its CR; the mount teardown in AfterAll is
+	// what removes it at the end of the suite.
+	It("leaves the transit key in OpenBao when the CR is deleted", func(ctx SpecContext) {
 		Expect(k8s.Delete(ctx, &v1alpha1.OpenBaoTransitKey{
 			ObjectMeta: metav1.ObjectMeta{Namespace: OperatorNS, Name: keyName},
 		})).To(Succeed())
 
 		expectGone(ctx, k8s, &v1alpha1.OpenBaoTransitKey{}, nn)
 
-		Eventually(func(g Gomega) {
-			_, err := bao.ReadTransitKey(ctx, mountPath, baoKey)
-			g.Expect(errors.Is(err, baoclient.ErrNotFound)).To(BeTrue(),
-				"expected ErrNotFound after CR delete, got %v", err)
-		}).WithTimeout(30 * time.Second).WithPolling(2 * time.Second).Should(Succeed())
+		info, err := bao.ReadTransitKey(ctx, mountPath, baoKey)
+		Expect(err).NotTo(HaveOccurred(), "bao key must survive CR deletion")
+		Expect(info.Type).To(Equal("aes256-gcm96"))
 	})
 
 	It("rejects convergentEncryption without derived=true", func(ctx SpecContext) {

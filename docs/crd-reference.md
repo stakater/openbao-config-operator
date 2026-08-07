@@ -24,7 +24,7 @@ lands its primitive(s).
 | `OpenBaoJWTOIDCAuthEngineConfig` | `security.mto.stakater.com/v1alpha1` | Namespaced | JWT/OIDC auth mount-level configuration at `auth/<path>/config`. OIDC discovery URL or static JWKS, client id + client_secret (read from a Kubernetes Secret), bound issuer, default role. Pairs with an `OpenBaoAuthMethod` of `type=jwt` or `type=oidc`. `IsDeletable=false`. |
 | `OpenBaoJWTOIDCAuthEngineRole` | `security.mto.stakater.com/v1alpha1` | Namespaced | JWT/OIDC role at `auth/<path>/role/<name>`. Maps inbound JWT/OIDC claims (sub, email, groups, etc.) to the bao identity entity and grants policies on successful login. `roleType=oidc` requires `allowedRedirectUris` for the OAuth2 callback URL set. |
 | `OpenBaoKubernetesAuthEngineConfig` | `security.mto.stakater.com/v1alpha1` | Namespaced | Kubernetes auth mount-level configuration at `auth/<path>/config`. `kubernetesHost`, optional CA bundle (Secret-sourced), token-reviewer JWT (Secret-sourced), `pemKeys`, `issuer`, and bao tunables. Pairs with an `OpenBaoAuthMethod` of `type=kubernetes`. Secret-watch propagates token-reviewer JWT and CA rotations. `IsDeletable=false` — bao has no DELETE on `/config`. |
-| `OpenBaoTransitKey` | `security.mto.stakater.com/v1alpha1` | Namespaced | Transit key at `<path>/keys/<name>`. Pairs with an `OpenBaoSecretEngine` of kind=transit at the same path. `spec.type` / `spec.derived` / `spec.convergentEncryption` / `spec.keySize` are immutable post-create — editing them surfaces `Ready=False reason=Invalid`. Bao's `deletion_allowed` flag is the canonical delete gate; CR delete with `spec.deletionAllowed` unset/false leaves the CR `Terminating` with `Ready=False reason=DeleteBlocked`. |
+| `OpenBaoTransitKey` | `security.mto.stakater.com/v1alpha1` | Namespaced | Transit key at `<path>/keys/<name>`. Pairs with an `OpenBaoSecretEngine` of kind=transit at the same path. `spec.type` / `spec.derived` / `spec.convergentEncryption` / `spec.keySize` are immutable post-create — editing them surfaces `Ready=False reason=Invalid`. `IsDeletable=false` — CR deletion releases the finalizer and leaves the bao key in place, because the key is the only copy of the material that decrypts everything encrypted under it. A rename orphans the previous identity for the same reason. |
 
 ---
 
@@ -1051,7 +1051,7 @@ See [config/samples/security_v1alpha1_openbaotransitkey.yaml](../config/samples/
 | `spec.exportable` | bool | no | bao default (false) | Allow `/export`. **Mutable but one-way** on bao's side — once enabled, bao refuses to disable. |
 | `spec.allowPlaintextBackup` | bool | no | bao default (false) | Same one-way semantics as `exportable`. |
 | `spec.autoRotatePeriod` | string | no | — | Go duration (`720h`); `0` or empty disables. `30d` is not a Go duration unit — use hours. |
-| `spec.deletionAllowed` | bool | no | bao default (false) | Gates `DELETE` on the bao side. CR delete with this unset/false surfaces `Ready=False reason=DeleteBlocked`. |
+| `spec.deletionAllowed` | bool | no | bao default (false) | Sets bao's `deletion_allowed` flag on the key, gating `DELETE` for callers of the bao API. It does **not** make CR deletion remove the key — this kind never deletes its bao object. Set it true to permit a deliberate teardown against bao directly. |
 | `spec.minDecryptionVersion` | int | no | 0 | Floor for decrypt operations. |
 | `spec.minEncryptionVersion` | int | no | 0 | Floor for encrypt operations. `0` = latest. |
 
@@ -1081,11 +1081,30 @@ Standard (`conditions`, `baoWritten`, `lastWrittenBaoName`,
   fields left unset adopt bao's value rather than appearing as drift.
   Immutable-field divergence drives the comparator to `false` so the
   immutability check inside `BaoWrite` catches it as `ErrInvalidSpec`.
-- **Delete gating.** Bao's own `deletion_allowed` flag is the canonical
-  gate. CR-level `spec.deletionAllowed` is plumbed through to bao via
-  the `/config` endpoint. Bao's 400 "deletion is not allowed" surfaces
-  as `Ready=False reason=DeleteBlocked`; finalizer holds until the user
-  flips `spec.deletionAllowed=true` and re-applies.
+- **The bao key outlives the CR.** `IsDeletable=false`: deleting the CR
+  releases the finalizer and leaves the key in bao. A transit key is the
+  only copy of the material that decrypts everything encrypted under it,
+  and the CR is derived state that disappears whenever its source stops
+  rendering it — an opt-in annotation removed, a namespace reaped, a
+  values typo — so tying destruction to CR deletion would make routine
+  churn unrecoverable. A rename orphans the previous `(path, name)` for
+  the same reason. Re-creating a CR at the same
+  `(openbaoNamespace, path, name)` adopts the existing key, so an
+  accidental removal costs nothing.
+  `spec.deletionAllowed` is plumbed to bao via the `/config` endpoint and
+  gates `DELETE` for callers of the bao API; it is not an instruction to
+  the operator. Destroying a key is deliberate and done against bao:
+  `bao write transit/keys/<key>/config deletion_allowed=true` then
+  `bao delete transit/keys/<key>`.
+- **Keys nothing manages accumulate in bao.** Because keys outlive their
+  CRs, partial teardown — an opt-in annotation removed, a namespace
+  dropped from a tenant, a rename — leaves keys behind with no owner and
+  no report; the operator log's intentional-orphan line is the only
+  trace. Note the boundary: this orphaning applies to the key's own CR
+  only. `OpenBaoSecretEngine` and `OpenBaoNamespace` both return
+  `IsDeletable=true`, so reaping a tenant's CRs disables the mount and
+  deletes the OpenBao namespace, destroying the keys outright rather
+  than orphaning them.
 - **Rotation is not reconcile-driven.** `auto_rotate_period` is the
   bao-managed knob; explicit rotation via `transit/keys/<name>/rotate`
   is out of scope for this CRD. `status.latestVersion` reflects the

@@ -62,10 +62,12 @@ spec:
                 type: boolean
               deletionAllowed:
                 description: |-
-                  DeletionAllowed gates DELETE transit/keys/<name> on the bao side.
-                  CR deletion when this is unset or false surfaces Ready=False
-                  reason=DeleteBlocked; the user flips it true and the next
-                  reconcile completes the delete.
+                  DeletionAllowed sets the bao-side deletion_allowed flag on the key,
+                  which gates DELETE transit/keys/<name> for callers of the bao API.
+                  It does not make CR deletion remove the key: this kind never
+                  deletes its bao object (see the package comment). Leave it unset to
+                  keep bao refusing DELETE on the key; set it true to permit an
+                  operator-independent teardown of the key against bao directly.
                 type: boolean
               derived:
                 description: |-

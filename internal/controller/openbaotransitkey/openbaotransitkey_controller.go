@@ -110,33 +110,21 @@ func OpenBaoTransitKeyHandlers(cl client.Client, bao baoclient.Client) resource.
 			}, nil
 		},
 
-		BaoDelete: func(ctx context.Context, k *v1alpha1.OpenBaoTransitKey) error {
-			ns := baoclient.WithNamespace(k.OpenBaoNamespace())
-			err := bao.DeleteTransitKey(ctx, k.MountPath(), k.BaoName(), ns)
-			if errors.Is(err, baoclient.ErrDeletionNotAllowed) {
-				return fmt.Errorf("%w: bao requires deletion_allowed=true on transit/keys/%s — "+
-					"set spec.deletionAllowed=true and re-apply, then delete the CR",
-					resource.ErrDeleteBlocked, k.BaoName())
-			}
-			return err
+		BaoDelete: func(ctx context.Context, _ *v1alpha1.OpenBaoTransitKey) error {
+			// Never reached: IsDeletable=false short-circuits this in the
+			// base. Wired as a safety in case a future spec change flips
+			// IsDeletable to true — deleting a transit key destroys the only
+			// material that decrypts its ciphertext, so the no-op has to be
+			// explicit rather than inherited from whatever the wrapper does.
+			return nil
 		},
 
-		BaoDeleteIdentity: func(ctx context.Context, k *v1alpha1.OpenBaoTransitKey, name, namespace string) error {
-			// Use the bao mount path that was active when (name,
-			// namespace) was last written, NOT the current spec.Path.
-			// A spec edit that changes both name AND path in one go
-			// would otherwise target the new mount and silently 404,
-			// orphaning the key at the old (path, name). The base
-			// only calls BaoDeleteIdentity after a successful
-			// BaoWrite has stamped LastWrittenPath via its returned
-			// StatusMutator, so an empty value here is a programming
-			// error — let bao surface the bad request.
-			err := bao.DeleteTransitKey(ctx, k.Status.LastWrittenPath, name, baoclient.WithNamespace(namespace))
-			if errors.Is(err, baoclient.ErrDeletionNotAllowed) {
-				return fmt.Errorf("%w: bao requires deletion_allowed=true on transit/keys/%s",
-					resource.ErrDeleteBlocked, name)
-			}
-			return err
+		BaoDeleteIdentity: func(ctx context.Context, _ *v1alpha1.OpenBaoTransitKey, _, _ string) error {
+			// Never reached: the base's rename-cleanup path skips
+			// BaoDeleteIdentity when IsDeletable=false. A rename leaves the
+			// key at the previous (path, name) in bao rather than destroying
+			// it. See the type comment for the orphan-by-design rationale.
+			return nil
 		},
 
 		CheckCollision: func(ctx context.Context, k *v1alpha1.OpenBaoTransitKey) error {

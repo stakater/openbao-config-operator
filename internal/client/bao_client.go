@@ -602,11 +602,12 @@ var ErrNotFound = errors.New("bao object not found")
 // ErrDeletionNotAllowed is returned by DeleteTransitKey when bao refuses
 // the delete because the bao-side key has deletion_allowed=false. Bao's
 // only structured signal here is a 400 with a specific message body, so
-// the wrapper matches the body and lifts the failure into a typed
-// sentinel — controllers translate this to resource.ErrDeleteBlocked at
-// the controller layer (baoclient does not import the resource package).
-// The contract test pins the exact bao response body so a wording change
-// upstream surfaces as a test failure rather than a silent regression.
+// the wrapper matches the body and lifts the failure into a typed sentinel
+// callers classify with errors.Is rather than by grepping the message
+// (baoclient does not import the resource package, so the mapping to a
+// Ready-condition reason belongs to the caller). The contract test pins the
+// exact bao response body so a wording change upstream surfaces as a test
+// failure rather than a silent regression.
 var ErrDeletionNotAllowed = errors.New("bao delete not allowed for transit key")
 
 // CallOption configures a single bao API call. The only option today is
@@ -1191,9 +1192,18 @@ func (c *sdkClient) DeleteK8sRole(ctx context.Context, authMount, roleName strin
 
 // ---- PKI ----
 
-// GenerateRootPKI calls /<mount>/root/generate/internal. DESTRUCTIVE on
-// a mount that already has a CA — bao silently overwrites the private
-// key. Callers must guard via ReadPKICA first.
+// GenerateRootPKI calls /<mount>/root/generate/internal, the pre-multi-issuer
+// endpoint: it names no issuer, and the response's issuer identity is dropped.
+//
+// On a mount that already holds a CA this ADDS a second issuer rather than
+// replacing the first — measured against OpenBao 2.5.5, where the original
+// issuer's certificate and private key survived untouched and the mount's
+// default issuer did not move. The engine has supported several issuers per
+// mount since the Vault 1.11 lineage OpenBao forked from, so an unguarded call
+// does not destroy key material; it leaves an unnamed, non-default issuer
+// behind. That issuer is invisible to ordinary issuance (nothing selects it)
+// yet still a CA sitting in the mount, so callers must still guard via
+// ReadPKICA to keep the mount to the one issuer this client can address.
 func (c *sdkClient) GenerateRootPKI(ctx context.Context, mount string, in PKIRootGenerateInput, opts ...CallOption) (*PKICAResponse, error) {
 	mount = strings.Trim(mount, "/")
 	if mount == "" {
