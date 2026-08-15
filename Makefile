@@ -416,8 +416,8 @@ golangci-lint: $(GOLANGCI_LINT) ## Download golangci-lint locally if necessary.
 $(GOLANGCI_LINT): $(LOCALBIN)
 	$(call go-install-tool,$(GOLANGCI_LINT),github.com/golangci/golangci-lint/cmd/golangci-lint,$(GOLANGCI_LINT_VERSION))
 
-.PHONY: helmify
-helmify: $(HELMIFY)
+.PHONY: helmify-bin
+helmify-bin: $(HELMIFY) ## Install the helmify binary. The chart itself is built by the helmify target.
 $(HELMIFY): $(LOCALBIN)
 	$(call go-install-tool,$(HELMIFY),github.com/arttor/helmify/cmd/helmify,${HELMIFY_VERSION})
 
@@ -482,11 +482,19 @@ HELM_MK_ARGS = \
 	HELMIFY_POSTPROCESS=$(HELMIFY_POSTPROCESS) \
 	IMG=$(IMG)
 
+# helm.mk's helm-release runs lint, package and push in one target, so it cannot
+# be stopped after generation. helmify below is the same pipeline's first step on
+# its own, for inspecting or diffing the chart without publishing it. It needs no
+# registry credentials: helm.mk gates only its push path on GIT_USER/GIT_TOKEN.
+.PHONY: helmify
+helmify: manifests helmify-bin kustomize yq download-helm-mk ## Generate the operator chart into $(HELM_CHART_DIR).
+	@$(HELM_MK_CMD) helmify $(HELM_MK_ARGS)
+
 .PHONY: helm-release
 helm-release: helm-release-operator ## Release the operator chart to OCI.
 
 .PHONY: helm-release-operator
-helm-release-operator: helmify kustomize yq download-helm-mk ## Helmify config/default and release the operator chart.
+helm-release-operator: manifests helmify-bin kustomize yq download-helm-mk ## Helmify config/default and release the operator chart.
 	@$(HELM_MK_CMD) helm-release $(HELM_MK_ARGS)
 
 # go-install-tool will 'go install' any package with custom target and name of binary, if it doesn't exist

@@ -46,6 +46,20 @@ You need:
 - OpenBao reachable and unsealed
 - a privileged OpenBao token, used only to mint a temporary one
 
+Inputs worth setting explicitly on a real cluster, since the defaults suit kind:
+
+| Variable | Set it to |
+| --- | --- |
+| `OPERATOR_NS` | the namespace the operator Deployment runs in — the role binds it, so a mismatch fails every login |
+| `REVIEWER_NS` | the namespace holding `bao-token-reviewer`. Defaults to `OPERATOR_NS`; on GitOps installs the reviewer is chart-managed and often lives elsewhere |
+| `OPERATOR_SA` | the Deployment's `serviceAccountName`. The default is the kustomize name; Helm derives its own from the release name |
+| `VAULT_ADDR` | an address that reaches the **active** node. A round-robin Service can answer from a standby, which fails writes |
+
+`VAULT_ADDR` is only ever resolved from inside the cluster — the script issues
+its requests from pods in `OPENBAO_NS`, so a `.svc.cluster.local` name is
+correct here and will not resolve from your laptop. Step 1 below is the
+opposite: it runs locally and needs an address your machine can reach.
+
 **1. Mint a temporary bootstrap token.** Root's only job — it never touches
 the script:
 
@@ -149,9 +163,27 @@ the message in the operator log or the CR's `Ready` condition names the cause:
 | `invalid audience (aud) claim` | the role's `audience` and the projected volume's `audience` differ |
 | `service account name not authorized` | the role's bound ServiceAccount is not the Deployment's `serviceAccountName` |
 | `invalid role name "..."` | `BAO_AUTH_ROLE` does not match the role the bootstrap created |
-| `permission denied` on login | the mount does not exist, or bao's token-reviewer credential is stale — re-run the bootstrap |
+| `permission denied` on login | the mount does not exist, or bao's token-reviewer credential is stale — re-run the bootstrap. On GitOps installs, check first whether `bao-token-reviewer-auth-delegator` names an SA in another namespace: it is cluster-scoped and singular, so a chart-managed one wins, and bao must be configured with *that* identity via `REVIEWER_NS` |
 | `permission denied` on a CR's path | the policy is missing that path; re-run the bootstrap after a policy-changing release |
 | `read service account token: no such file` | `BAO_AUTH_JWT_PATH` does not match the projected volume's mount path |
+| `local node not active but active cluster node not found` | not a bootstrap fault: the address answered from a standby that could not forward to the leader. Use the active-only Service; if it has no endpoints, OpenBao lacks its `service_registration "kubernetes"` stanza and nothing labels the leader |
+| `namespaces "..." not found` at startup, from `hmacstore` | `OPERATOR_NS` is not reaching the container, so the HMAC key Secret is being created in a hardcoded namespace. The Deployment must inject it via downward API |
+| `404 namespace not found` on tenant CRs | the bao namespace does not exist. Its parent `OpenBaoNamespace` CR is missing — children requeue forever until it reconciles, which is correct behavior, not an operator fault |
+
+### Deleting CRs in bulk
+
+Eight kinds default to `deletionPolicy: Delete` — policies, groups, group
+aliases, identity token roles, and the kubernetes / JWT-OIDC / PKI / cert login
+roles. Deleting those CRs removes the bao objects behind them, which revokes
+live access. Namespaces, auth methods and secret engines default to `Retain` and
+merely orphan.
+
+This matters most under GitOps, where a prune is a bulk delete: retargeting an
+Application's namespace, renaming it, or narrowing a selector all delete and
+recreate CRs, and the eight `Delete` kinds take their bao objects with them on
+the way out. Before a structural change to whatever renders these CRs, either
+set those kinds to `Retain` for the duration or disable prune — the operator
+rebuilds bao state from the CRs afterwards, but access is gone in the interval.
 
 ## E2E
 
