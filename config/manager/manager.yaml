@@ -65,6 +65,15 @@ spec:
           - --health-probe-bind-address=:8081
         
         env:
+          # Own namespace, for objects the operator stores about itself (the
+          # HMAC key Secret). Downward API rather than a literal so the
+          # operator works in whatever namespace it is installed into;
+          # without it, bootstrapHMACComputer falls back to a hardcoded
+          # namespace and startup fails anywhere else.
+          - name: OPERATOR_NS
+            valueFrom:
+              fieldRef:
+                fieldPath: metadata.namespace
           # The operator holds no bao credential: it logs in at
           # auth/k8s-operator/login with the projected ServiceAccount token
           # below (see hack/e2e/openbao/bootstrap_operator_auth.sh for the
